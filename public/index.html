@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EduMole Pro v6.2</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM & Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Firebase Compat SDKs (Browser globals) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- Lucide Icons Core -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700;900&display=swap');
+        body { font-family: 'Pretendard', sans-serif; }
+        .animate-bounce-slow { animation: bounce 1s infinite; }
+        @keyframes bounce { 0%, 100% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0.8,0,1,1); } 50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); } }
+        .mole-hole { background: rgba(69, 26, 3, 0.4); box-shadow: inset 0 4px 8px rgba(0,0,0,0.5); }
+        .custom-scroll::-webkit-scrollbar { width: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .grid-input:focus { background-color: rgba(255, 255, 255, 0.2); }
+    </style>
+
+    <script>
+        // ✅ Firebase 설정 (MCP로 자동 생성됨)
+        window.firebaseConfig = {
+            apiKey: "AIzaSyD4AJdh54Z9PvUVDdT0jt6gRSHMOMxz3io",
+            authDomain: "edumole-pro.firebaseapp.com",
+            projectId: "edumole-pro",
+            storageBucket: "edumole-pro.firebasestorage.app",
+            messagingSenderId: "732850379958",
+            appId: "1:732850379958:web:8e68fdf5133fe2e542da17"
+        };
+
+        // 앱 고유 ID
+        window.APP_ID = 'edu-mole-pro-v6';
+    </script>
+</head>
+<body class="bg-slate-50 antialiased overflow-x-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef, useMemo } = React;
+
+        // --- Lucide Icon Wrapper ---
+        const Icon = ({ name, size = 20, color = "currentColor", className = "" }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                if (iconRef.current && window.lucide) {
+                    const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+                    iconRef.current.innerHTML = `<i data-lucide="${kebabName}"></i>`;
+                    window.lucide.createIcons({
+                        attrs: {
+                            width: size,
+                            height: size,
+                            stroke: color,
+                            class: className,
+                            'stroke-width': 2.5
+                        }
+                    });
+                }
+            }, [name, size, color, className]);
+            return <span ref={iconRef} className="inline-flex items-center justify-center leading-none" />;
+        };
+
+        // --- Firebase Initialization ---
+        const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(window.firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const appId = window.APP_ID;
+
+        // --- Collections ---
+        const COL_PROBLEMS = 'problemSets';
+        const COL_RESULTS = 'gameResults';
+        const COL_ROSTER = 'roster';
+        const COL_CLASSES = 'classes';
+
+        const formatDateTime = (date = new Date()) => {
+            const d = new Date(date);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+        };
+
+        // --- Views ---
+
+        const HomeView = ({ setView, teacherAuth }) => (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+                <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-md w-full border-b-8 border-slate-200">
+                    <div className="bg-indigo-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 text-indigo-600">
+                        <Icon name="GraduationCap" size={40} />
+                    </div>
+                    <h1 className="text-4xl font-black text-slate-800 mb-2 tracking-tight italic">Edu Mole!</h1>
+                    <p className="text-slate-500 mb-10 font-medium tracking-tight">V6.2: 고성능 학습 관리 시스템</p>
+                    <div className="space-y-4">
+                        <button onClick={() => setView('student-class-select')} className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-5 rounded-2xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-3 text-xl">
+                            <Icon name="Play" size={24} /> 학생 입장하기
+                        </button>
+                        <button
+                            onClick={() => teacherAuth ? setView('teacher-main') : setView('teacher-login')}
+                            className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-5 rounded-2xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-3 text-xl"
+                        >
+                            <Icon name="Settings" size={24} /> 교사 대시보드
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const TeacherLoginView = ({ passInput, setPassInput, handleTeacherLogin, setView }) => (
+            <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
+                <div className="bg-white p-10 rounded-[2.5rem] shadow-2xl max-sm:w-full max-w-sm text-center">
+                    <div className="bg-indigo-100 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 text-indigo-600">
+                        <Icon name="Lock" size={32} />
+                    </div>
+                    <h2 className="text-2xl font-black mb-2">교사 인증</h2>
+                    <p className="text-slate-400 text-sm mb-8 font-medium">관리자 전용 비밀번호를 입력하세요.</p>
+                    <div className="space-y-4">
+                        <input
+                            type="password"
+                            value={passInput}
+                            onChange={e => setPassInput(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleTeacherLogin()}
+                            placeholder="비밀번호 (기본: 0000)"
+                            className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none text-center text-xl font-black"
+                            autoFocus
+                        />
+                        <button onClick={handleTeacherLogin} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 rounded-2xl shadow-lg transition transform active:scale-95">
+                            로그인
+                        </button>
+                        <button onClick={() => setView('home')} className="w-full text-slate-400 font-bold text-sm">홈으로 돌아가기</button>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const StudentLoginView = ({ selectedClass, studentCodeInput, setStudentCodeInput, handleStudentLogin, setView }) => (
+            <div className="min-h-screen bg-orange-50 flex items-center justify-center p-6 text-center">
+                <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-sm w-full border-b-8 border-orange-200">
+                    <div className="text-xs font-black text-orange-500 uppercase tracking-widest mb-2 px-4 py-1 bg-orange-50 rounded-full inline-block">{selectedClass?.name}</div>
+                    <h2 className="text-2xl font-black mb-8 tracking-tighter">입장 코드 입력</h2>
+                    <div className="space-y-4">
+                        <input
+                            type="text"
+                            value={studentCodeInput}
+                            onChange={e => setStudentCodeInput(e.target.value)}
+                            placeholder="예: 6101홍길동"
+                            className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-orange-400 outline-none text-center text-2xl font-black transition tracking-tighter"
+                            autoFocus
+                        />
+                        <button onClick={handleStudentLogin} className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-5 rounded-2xl shadow-lg transition transform active:scale-95 flex items-center justify-center gap-2 text-xl text-white">
+                            도전 시작 <Icon name="ArrowRight" size={24}/>
+                        </button>
+                        <button onClick={()=>setView('student-class-select')} className="w-full text-slate-400 font-bold text-sm hover:text-orange-500 transition font-sans">학급 다시 선택</button>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // --- Teacher Quiz Editor Component ---
+        function TeacherQuizEditor({ selectedSet, setSelectedSet, setView, formatDateTime, appId, db, showMsg }) {
+            const [gridData, setGridData] = useState([['', '', '', '', '']]);
+            const [isGridModalOpen, setIsGridModalOpen] = useState(false);
+
+            const handlePaste = (e) => {
+                e.preventDefault();
+                const text = e.clipboardData.getData('text');
+                const rows = text.split('\n').filter(r => r.trim()).map(r => r.split('\t'));
+                const newGrid = rows.map(row => {
+                    const rowData = ['', '', '', '', ''];
+                    row.forEach((cell, cIdx) => { if (cIdx < 5) rowData[cIdx] = cell.trim(); });
+                    return rowData;
+                });
+                setGridData(newGrid);
+            };
+
+            const applyGrid = () => {
+                const validProblems = gridData.filter(row => row[0] && row[1]).map(row => ({
+                    question: row[0],
+                    answer: row[1],
+                    distractors: [row[2] || '오답1', row[3] || '오답2', row[4] || '오답3']
+                }));
+                setSelectedSet({ ...selectedSet, problems: [...(selectedSet?.problems || []), ...validProblems] });
+                setGridData([['', '', '', '', '']]);
+                setIsGridModalOpen(false);
+                showMsg(`${validProblems.length}개의 문항이 추가되었습니다.`);
+            };
+
+            const saveSetToDB = async () => {
+                if(!selectedSet?.title) return alert('퀴즈 제목을 입력하세요.');
+                const data = {
+                    title: selectedSet.title,
+                    problems: selectedSet.problems || [],
+                    moleCount: selectedSet.moleCount || 6,
+                    timeLimit: selectedSet.timeLimit || 30,
+                    updatedAt: Date.now(),
+                    updatedAtFormatted: formatDateTime()
+                };
+                const colRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection(COL_PROBLEMS);
+                try {
+                    if(selectedSet?.id) await colRef.doc(selectedSet.id).update(data);
+                    else await colRef.add({ ...data, createdAt: Date.now(), createdAtFormatted: formatDateTime() });
+                    setView('teacher-main');
+                    showMsg('퀴즈가 저장되었습니다!');
+                } catch (e) {
+                    alert("저장 실패: " + e.message);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-50 p-6 md:p-10 text-left">
+                    <div className="max-w-5xl mx-auto">
+                        <header className="flex justify-between items-center mb-10 text-slate-800">
+                            <button onClick={() => setView('teacher-main')} className="flex items-center gap-2 text-slate-500 font-bold hover:text-indigo-600 transition"><Icon name="ChevronLeft" size={18}/> 돌아가기</button>
+                            <h2 className="text-2xl font-black italic tracking-tighter">Quiz Creator Pro</h2>
+                            <button onClick={saveSetToDB} className="bg-indigo-600 text-white px-8 py-2.5 rounded-xl font-bold shadow-lg hover:bg-indigo-700 transition flex items-center gap-2">
+                                <Icon name="Save" size={18}/> 서버 저장
+                            </button>
+                        </header>
+
+                        <div className="space-y-8">
+                            <div className="bg-white p-8 rounded-[2.5rem] border shadow-sm flex flex-col md:flex-row gap-8 items-center">
+                                <div className="flex-1 w-full text-left text-slate-800">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block ml-1">Quiz Topic</label>
+                                    <input value={selectedSet?.title || ''} onChange={e => setSelectedSet({ ...selectedSet, title: e.target.value })} placeholder="제목을 입력하세요" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-slate-50 font-black text-xl focus:border-indigo-400 outline-none transition" />
+                                </div>
+                                <div className="flex gap-4 w-full md:w-auto">
+                                    <div className="flex-1 md:w-56 bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-indigo-600">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1"><Icon name="Layers" size={12}/> Mole Count</span>
+                                            <span className="text-lg font-black">{selectedSet?.moleCount || 6}</span>
+                                        </div>
+                                        <input type="range" min="2" max="6" value={selectedSet?.moleCount || 6} onChange={e => setSelectedSet({...selectedSet, moleCount: parseInt(e.target.value)})} className="w-full accent-indigo-600 cursor-pointer" />
+                                    </div>
+                                    <div className="flex-1 md:w-56 bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-orange-600">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-[10px] font-black uppercase tracking-widest flex items-center gap-1"><Icon name="Clock" size={12}/> Time Limit</span>
+                                            <span className="text-lg font-black">{selectedSet?.timeLimit || 30}초</span>
+                                        </div>
+                                        <input type="range" min="10" max="120" step="10" value={selectedSet?.timeLimit || 30} onChange={e => setSelectedSet({...selectedSet, timeLimit: parseInt(e.target.value)})} className="w-full accent-orange-500 cursor-pointer" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-between items-center px-2">
+                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest tracking-tight">문항 목록 ({(selectedSet?.problems || []).length})</h4>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setIsGridModalOpen(true)} className="bg-slate-800 text-white px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-900 transition shadow-lg">
+                                        <Icon name="Grid" size={18}/> 시트 일괄 가져오기
+                                    </button>
+                                    <button onClick={() => setSelectedSet({...selectedSet, problems: [...(selectedSet?.problems || []), {question:'', answer:'', distractors:['','','']}]})} className="bg-white border text-slate-600 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-50 transition shadow-sm border-slate-200">
+                                        <Icon name="Plus" size={18}/> 개별 문항 추가
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20 text-slate-800">
+                                {(selectedSet?.problems || []).map((p, i) => (
+                                    <div key={i} className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm relative group hover:shadow-md transition border-b-8 border-b-indigo-50">
+                                        <button onClick={() => { const n = [...selectedSet.problems]; n.splice(i, 1); setSelectedSet({...selectedSet, problems: n}); }} className="absolute top-6 right-6 text-slate-200 hover:text-red-500 transition group-hover:text-slate-400"><Icon name="Trash2" size={22}/></button>
+                                        <div className="text-[10px] font-black text-indigo-500 mb-3 tracking-widest uppercase italic">Problem {i+1}</div>
+                                        <div className="font-black text-slate-800 mb-6 break-keep leading-snug text-lg min-h-[56px] line-clamp-2">{p.question}</div>
+                                        <div className="space-y-3">
+                                            <div className="text-[11px] bg-emerald-50 text-emerald-700 p-3 rounded-xl font-black border border-emerald-100 shadow-sm flex items-center gap-2">
+                                                <Icon name="CheckCircle2" size={16} className="text-emerald-500"/> {p.answer}
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-1.5 text-slate-500">
+                                                {p.distractors && p.distractors.map((d, dIdx) => (
+                                                    <div key={dIdx} className="text-[10px] bg-red-50/50 text-red-400 p-2 rounded-lg font-bold border border-red-50 truncate flex items-center gap-2">
+                                                        <Icon name="XCircle" size={12} className="text-red-400"/> {d}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!selectedSet?.problems || selectedSet.problems.length === 0) && (
+                                    <div className="md:col-span-2 py-32 text-center text-slate-300 italic font-bold border-4 border-dashed rounded-[3rem] border-slate-100 bg-slate-50/50">
+                                        아직 등록된 문항이 없습니다. <br/>상단의 일괄 가져오기 버튼을 이용해 보세요!
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
+                    {isGridModalOpen && (
+                        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4 md:p-10 text-slate-800">
+                            <div className="bg-indigo-600 w-full max-w-6xl rounded-[3rem] p-8 md:p-12 shadow-2xl relative border-4 border-white/10">
+                                <button onClick={() => setIsGridModalOpen(false)} className="absolute top-8 right-8 text-white/50 hover:text-white transition"><Icon name="X" size={32}/></button>
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                                    <div className="text-left text-white">
+                                        <h3 className="text-3xl font-black flex items-center gap-3"><Icon name="Grid" size={32}/> 스프레드시트 일괄 등록</h3>
+                                        <p className="text-indigo-100 text-sm mt-2 font-medium opacity-90 leading-relaxed italic">
+                                            질문, 정답, 오답1, 오답2, 오답3 범위를 복사한 뒤 첫 번째 질문 칸을 누르고 붙여넣으세요.
+                                        </p>
+                                    </div>
+                                    <button onClick={applyGrid} className="bg-white text-indigo-600 px-8 py-4 rounded-2xl font-black shadow-xl hover:scale-105 transition transform active:scale-95 text-lg">리스트에 문항 추가</button>
+                                </div>
+                                <div className="overflow-x-auto bg-white/10 rounded-[2rem] p-4 border border-white/20 custom-scroll">
+                                    <table className="w-full border-separate border-spacing-2">
+                                        <thead>
+                                            <tr className="text-[11px] font-black uppercase text-white/40 text-center tracking-widest">
+                                                <th className="w-10">NO</th><th>질문</th><th className="text-emerald-300">정답</th><th className="text-red-300">오답1</th><th className="text-red-300">오답2</th><th className="text-red-300">오답3</th><th className="w-10"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {gridData.map((row, rIdx) => (
+                                                <tr key={rIdx}>
+                                                    <td className="text-center text-[10px] font-black text-white/30">{rIdx + 1}</td>
+                                                    {[0, 1, 2, 3, 4].map(cIdx => (
+                                                        <td key={cIdx}>
+                                                            <input
+                                                                value={row[cIdx]}
+                                                                onChange={e => { const n = [...gridData]; n[rIdx][cIdx] = e.target.value; setGridData(n); }}
+                                                                onPaste={rIdx === 0 && cIdx === 0 ? handlePaste : undefined}
+                                                                placeholder={cIdx === 0 ? "이곳에 붙여넣기..." : ""}
+                                                                className={`w-full p-3 bg-white/10 border border-white/10 rounded-xl text-white text-xs outline-none focus:bg-white/20 focus:border-white/50 transition placeholder:text-white/20 ${cIdx === 1 ? 'border-emerald-500/40 bg-emerald-500/10' : ''}`}
+                                                            />
+                                                        </td>
+                                                    ))}
+                                                    <td><button onClick={()=>{ const n = [...gridData]; n.splice(rIdx,1); if(n.length === 0) n.push(['','','','','']); setGridData(n); }} className="p-2 text-white/30 hover:text-red-400 transition"><Icon name="Trash2" size={18}/></button></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    <button onClick={() => setGridData([...gridData, ['', '', '', '', '']])} className="mt-4 w-full bg-white/10 hover:bg-white/20 text-white px-4 py-3 rounded-xl font-bold border border-white/20 transition flex items-center justify-center gap-2">
+                                        <Icon name="Plus" size={18}/> 행 추가
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // --- Game Engine ---
+        function WhackAMoleGame({ selectedSet, currentStudent, selectedClass, setView, setSelectedSet, formatDateTime, db, appId }) {
+            const [timeLeft, setTimeLeft] = useState(selectedSet?.timeLimit || 30);
+            const [score, setScore] = useState(0);
+            const [currentProbIdx, setCurrentProbIdx] = useState(0);
+            const [moles, setMoles] = useState(Array(6).fill({ active: false, content: '', isCorrect: false }));
+            const [ansLog, setAnsLog] = useState([]);
+            const [fb, setFb] = useState(null);
+            const active = useRef(true);
+            const MOLE_LIMIT = selectedSet?.moleCount || 6;
+
+            const finish = useCallback(async (s, a) => {
+                if (!active.current) return;
+                active.current = false;
+                const res = {
+                    studentName: currentStudent.name,
+                    studentCode: currentStudent.code,
+                    classId: selectedClass.id,
+                    className: selectedClass.name,
+                    setId: selectedSet.id,
+                    score: s,
+                    correctCount: a.filter(x=>x.isCorrect).length,
+                    totalCount: selectedSet.problems.length,
+                    detailedAnswers: a,
+                    timestamp: Date.now(),
+                    submittedAt: formatDateTime()
+                };
+                try {
+                    await db.collection('artifacts').doc(appId).collection('public').doc('data').collection(COL_RESULTS).add(res);
+                } catch (e) {
+                    console.error("Result save error", e);
+                }
+                setSelectedSet({...selectedSet, result: res});
+                setView('student-result');
+            }, [currentStudent, selectedSet, selectedClass, setView, setSelectedSet, formatDateTime, db, appId]);
+
+            useEffect(() => {
+                if(timeLeft <= 0) { finish(score, ansLog); return; }
+                const t = setInterval(()=>setTimeLeft(p=>p-1), 1000);
+                return ()=>clearInterval(t);
+            }, [timeLeft, finish, score, ansLog]);
+
+            useEffect(() => {
+                if(!active.current) return;
+                const spawnTimer = setInterval(() => {
+                    setMoles(prev => {
+                        const emptyHoles = prev.map((m, i) => i < MOLE_LIMIT && !m.active ? i : -1).filter(i => i !== -1);
+                        if (emptyHoles.length === 0) return prev;
+                        const randomHoleIdx = emptyHoles[Math.floor(Math.random() * emptyHoles.length)];
+                        const p = selectedSet.problems[currentProbIdx];
+                        const isCorrect = Math.random() < 0.35;
+                        const content = isCorrect ? p.answer : (p.distractors[Math.floor(Math.random() * 3)] || '함정!');
+                        const next = [...prev];
+                        next[randomHoleIdx] = { active: true, content, isCorrect };
+                        setTimeout(() => {
+                            setMoles(currentMoles => {
+                                const updated = [...currentMoles];
+                                if (updated[randomHoleIdx]) updated[randomHoleIdx] = { ...updated[randomHoleIdx], active: false };
+                                return updated;
+                            });
+                        }, 1800 + Math.random() * 1000);
+                        return next;
+                    });
+                }, 1200);
+                return ()=>clearInterval(spawnTimer);
+            }, [currentProbIdx, selectedSet, MOLE_LIMIT]);
+
+            const whack = (idx) => {
+                const mole = moles[idx];
+                if(!mole.active) return;
+                setMoles(prev => { const next = [...prev]; next[idx] = { ...next[idx], active: false }; return next; });
+                setFb(mole.isCorrect);
+                setTimeout(()=>setFb(null), 800);
+                const newAns = { questionIndex: currentProbIdx, isCorrect: mole.isCorrect };
+                const nextAnsLog = [...ansLog, newAns];
+                if(mole.isCorrect) {
+                    const nextScore = score + Math.ceil(100 / selectedSet.problems.length);
+                    if(currentProbIdx < selectedSet.problems.length - 1) { setScore(nextScore); setAnsLog(nextAnsLog); setCurrentProbIdx(v=>v+1); }
+                    else { finish(nextScore, nextAnsLog); }
+                } else { setScore(s=>Math.max(0, s-5)); setAnsLog(nextAnsLog); }
+            };
+
+            return (
+                <div className="min-h-screen bg-sky-400 overflow-hidden relative select-none">
+                    {fb !== null && (
+                        <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                            <div className={`px-14 py-8 rounded-[3.5rem] text-6xl font-black shadow-2xl ${fb ? 'bg-emerald-500' : 'bg-red-500'} text-white border-4 border-white animate-bounce-slow`}>{fb ? '정답!' : '틀렸어!'}</div>
+                        </div>
+                    )}
+                    <div className="p-4 md:p-8 flex justify-between items-start">
+                        <div className="bg-white/95 p-5 rounded-[2rem] shadow-2xl flex gap-8">
+                            <div className="text-center text-slate-800">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">SCORE</div>
+                                <div className="text-3xl font-black text-emerald-600 italic">{score}</div>
+                            </div>
+                            <div className="w-[1px] bg-slate-200"></div>
+                            <div className="text-center text-slate-800">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">TIME</div>
+                                <div className={`text-3xl font-black ${timeLeft < 10 ? 'text-red-500' : ''}`}>{timeLeft}s</div>
+                            </div>
+                        </div>
+                        <div className="bg-white p-5 rounded-[2rem] shadow-2xl font-black text-orange-500 text-2xl italic tracking-tight">Q {currentProbIdx+1}/{selectedSet.problems.length}</div>
+                    </div>
+                    <div className="max-w-xl mx-auto mt-4 px-6 relative z-10 text-center">
+                        <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border-b-8 border-slate-200 relative overflow-hidden text-slate-800">
+                            <h2 className="text-2xl md:text-3xl font-black break-keep leading-tight">{selectedSet.problems[currentProbIdx].question}</h2>
+                        </div>
+                    </div>
+                    <div className={`max-w-3xl mx-auto mt-24 grid gap-y-24 gap-x-8 px-6 ${MOLE_LIMIT <= 3 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                        {Array.from({ length: MOLE_LIMIT }).map((_, i) => (
+                            <div key={i} className="relative aspect-square">
+                                <div className="absolute inset-0 mole-hole rounded-[50%] scale-y-50 mt-12 border-b-4 border-amber-950/20"></div>
+                                <div onClick={() => whack(i)} className={`absolute inset-0 transition-all duration-300 transform cursor-pointer ${moles[i].active ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-full opacity-0 scale-90 pointer-events-none'}`}>
+                                    <div className="w-full h-full bg-orange-800 rounded-t-[50%] border-4 border-orange-950 relative overflow-hidden flex flex-col items-center pt-6 shadow-xl">
+                                        <div className="flex gap-4 mb-1">
+                                            <div className="w-3.5 h-3.5 bg-slate-900 rounded-full flex items-center justify-center relative"><div className="w-1 h-1 bg-white rounded-full absolute top-1 left-1"></div></div>
+                                            <div className="w-3.5 h-3.5 bg-slate-900 rounded-full flex items-center justify-center relative"><div className="w-1 h-1 bg-white rounded-full absolute top-1 left-1"></div></div>
+                                        </div>
+                                        <div className="w-4 h-2.5 bg-pink-400 rounded-full mb-4 shadow-sm border border-pink-500/20"></div>
+                                        <div className="bg-white p-5 rounded-3xl border-2 border-slate-200 text-[40px] font-black w-11/12 text-center break-words shadow-lg leading-tight text-slate-700 min-h-[80px] flex items-center justify-center tracking-tighter">{moles[i].content}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 h-1/4 bg-emerald-500 -z-10 rounded-t-[100%] scale-x-125 border-t-8 border-emerald-400/30"></div>
+                </div>
+            );
+        }
+
+        // --- Main App Component ---
+        function App() {
+            const [view, setView] = useState('home');
+            const [user, setUser] = useState(null);
+            const [classes, setClasses] = useState([]);
+            const [problemSets, setProblemSets] = useState([]);
+            const [results, setResults] = useState([]);
+            const [roster, setRoster] = useState([]);
+            const [selectedClass, setSelectedClass] = useState(null);
+            const [selectedSet, setSelectedSet] = useState(null);
+            const [studentCodeInput, setStudentCodeInput] = useState('');
+            const [currentStudent, setCurrentStudent] = useState(null);
+            const [teacherAuth, setTeacherAuth] = useState(false);
+            const [passInput, setPassInput] = useState('');
+            const [msg, setMsg] = useState(null);
+            const [isClassAddOpen, setIsClassAddOpen] = useState(false);
+            const [isRosterBatchOpen, setIsRosterBatchOpen] = useState(false);
+            const [batchText, setBatchText] = useState('');
+
+            const showMsg = (text) => { setMsg(text); setTimeout(() => setMsg(null), 3000); };
+
+            useEffect(() => {
+                const initAuth = async () => {
+                    try {
+                        await auth.signInAnonymously();
+                        console.log("✅ Firebase 인증 성공!");
+                    } catch (error) {
+                        console.error("❌ Firebase 인증 실패:", error);
+                        alert("Firebase 연결에 실패했습니다. Firebase 설정을 확인하세요.");
+                    }
+                };
+                initAuth();
+                const unsubscribe = auth.onAuthStateChanged((u) => {
+                    setUser(u);
+                    if (u) console.log("✅ 사용자 인증됨:", u.uid);
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user) return;
+                const pathRef = (col) => db.collection('artifacts').doc(appId).collection('public').doc('data').collection(col);
+
+                const errorFn = (err) => {
+                    console.error("❌ Firestore 에러:", err);
+                    if (err.code === 'permission-denied') {
+                        alert('Firestore 보안 규칙을 설정하세요! (가이드 문서 참고)');
+                    }
+                };
+
+                const unsubC = pathRef(COL_CLASSES).onSnapshot(s => {
+                    setClasses(s.docs.map(d => ({ id: d.id, ...d.data() })));
+                    console.log("✅ 학급 데이터 로드:", s.docs.length + "개");
+                }, errorFn);
+
+                const unsubP = pathRef(COL_PROBLEMS).onSnapshot(s => {
+                    setProblemSets(s.docs.map(d => ({ id: d.id, ...d.data() })));
+                    console.log("✅ 퀴즈 세트 로드:", s.docs.length + "개");
+                }, errorFn);
+
+                const unsubR = pathRef(COL_RESULTS).onSnapshot(s => {
+                    setResults(s.docs.map(d => ({ id: d.id, ...d.data() })));
+                    console.log("✅ 결과 데이터 로드:", s.docs.length + "개");
+                }, errorFn);
+
+                const unsubRo = pathRef(COL_ROSTER).onSnapshot(s => {
+                    setRoster(s.docs.map(d => ({ id: d.id, ...d.data() })));
+                    console.log("✅ 명렬표 데이터 로드:", s.docs.length + "개");
+                }, errorFn);
+
+                return () => { unsubC(); unsubP(); unsubR(); unsubRo(); };
+            }, [user]);
+
+            const handleTeacherLogin = () => {
+                if (passInput === '0000') { setTeacherAuth(true); setView('teacher-main'); setPassInput(''); }
+                else { showMsg('비밀번호가 틀렸습니다.'); }
+            };
+
+            const handleStudentLogin = () => {
+                const found = roster.find(s => s.classId === selectedClass?.id && s.code === studentCodeInput.trim());
+                if (found) { setCurrentStudent(found); setView('student-setup'); }
+                else { showMsg('입장 코드가 올바르지 않습니다.'); }
+            };
+
+            return (
+                <div className="antialiased text-slate-900 font-sans">
+                    {view === 'home' && <HomeView setView={setView} teacherAuth={teacherAuth} />}
+                    {view === 'teacher-login' && <TeacherLoginView passInput={passInput} setPassInput={setPassInput} handleTeacherLogin={handleTeacherLogin} setView={setView} />}
+                    {view === 'teacher-main' && (
+                        <div className="min-h-screen bg-slate-50 p-6 md:p-10">
+                            <div className="max-w-6xl mx-auto">
+                                <header className="flex justify-between items-center mb-10 text-slate-800">
+                                    <h2 className="text-3xl font-black flex items-center gap-3"><Icon name="Settings" color="#6366f1" /> 관리 대시보드</h2>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setTeacherAuth(false); setView('home'); }} className="bg-white p-3 rounded-xl border border-slate-200 text-slate-400 hover:text-red-500 transition shadow-sm"><Icon name="LogOut" size={20}/></button>
+                                        <button onClick={() => setView('home')} className="bg-white p-3 rounded-xl border border-slate-200 hover:bg-slate-100 transition shadow-sm"><Icon name="Home" size={20}/></button>
+                                    </div>
+                                </header>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 text-left">
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div className="bg-indigo-50 w-12 h-12 rounded-2xl flex items-center justify-center text-indigo-600"><Icon name="GraduationCap" size={24} /></div>
+                                            <button onClick={() => setIsClassAddOpen(true)} className="text-indigo-600 font-bold text-sm flex items-center gap-1 hover:underline transition"><Icon name="Plus" size={16}/> 학급 등록</button>
+                                        </div>
+                                        <h3 className="text-xl font-bold mb-4 tracking-tighter">학급 및 명렬표</h3>
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scroll">
+                                            {classes.map(c => (
+                                                <button key={c.id} onClick={() => { setSelectedClass(c); setView('teacher-roster'); }} className="w-full flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:bg-indigo-50 transition">
+                                                    <div className="text-left"><div className="font-bold text-slate-700">{c.name}</div><div className="text-[10px] font-bold text-indigo-400 uppercase">{c.grade}학년 {c.classNum}반</div></div>
+                                                    <Icon name="ChevronRight" size={18} className="text-slate-300"/>
+                                                </button>
+                                            ))}
+                                            {classes.length === 0 && <p className="text-slate-400 text-xs text-center py-10 italic">등록된 학급이 없습니다.</p>}
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 text-left">
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div className="bg-emerald-50 w-12 h-12 rounded-2xl flex items-center justify-center text-emerald-600"><Icon name="ClipboardList" size={24} /></div>
+                                            <button onClick={() => { setSelectedSet({ title: '', problems: [], moleCount: 6 }); setView('teacher-edit'); }} className="text-emerald-600 font-bold text-sm flex items-center gap-1 hover:underline transition"><Icon name="Plus" size={16}/> 퀴즈 제작</button>
+                                        </div>
+                                        <h3 className="text-xl font-bold mb-4 tracking-tighter">퀴즈 세트</h3>
+                                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1 custom-scroll">
+                                            {problemSets.sort((a,b)=>b.updatedAt-a.updatedAt).map(s => (
+                                                <div key={s.id} className="flex flex-col p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                    <div className="flex items-center justify-between mb-1 text-slate-800">
+                                                        <span className="font-bold text-sm truncate max-w-[150px]">{s.title}</span>
+                                                        <div className="flex gap-1">
+                                                            <button onClick={() => { setSelectedSet(s); setView('teacher-stats'); }} className="p-1.5 text-indigo-500 hover:bg-white rounded-lg transition shadow-sm"><Icon name="BarChart3" size={14}/></button>
+                                                            <button onClick={() => { setSelectedSet(s); setView('teacher-edit'); }} className="p-1.5 text-slate-400 hover:bg-white rounded-lg transition"><Icon name="Settings" size={14}/></button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[9px] text-slate-400 flex items-center gap-1"><Icon name="Layers" size={8}/> {s.moleCount || 6} 마리</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-8 rounded-[2rem] shadow-sm border border-slate-100 text-center">
+                                        <div className="bg-orange-50 w-12 h-12 rounded-2xl flex items-center justify-center text-orange-600 mb-6 mx-auto"><Icon name="Database" size={24} /></div>
+                                        <h3 className="text-xl font-bold mb-4 tracking-tighter text-left text-slate-800">데이터 현황</h3>
+                                        <div className="space-y-3 text-left">
+                                            <div className="bg-slate-50 p-4 rounded-2xl flex justify-between items-center"><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">누적 결과</span><span className="text-xl font-black text-slate-800">{results.length}건</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {isClassAddOpen && (
+                                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-6 text-slate-800">
+                                    <div className="bg-white w-full max-w-sm rounded-[2.5rem] p-10 shadow-2xl text-slate-800">
+                                        <h3 className="text-2xl font-black mb-6 text-center">학급 신규 등록</h3>
+                                        <div className="space-y-4 mb-8">
+                                            <input id="new-cls-name" placeholder="학급 명 (예: 6학년 2반)" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 font-bold"/>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <input id="new-cls-grade" type="number" placeholder="학년" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 font-bold"/>
+                                                <input id="new-cls-num" type="number" placeholder="반" className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 font-bold"/>
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <button onClick={async () => {
+                                                try {
+                                                    const name = document.getElementById('new-cls-name').value;
+                                                    const grade = document.getElementById('new-cls-grade').value;
+                                                    const classNum = document.getElementById('new-cls-num').value;
+                                                    if(name && grade && classNum) {
+                                                        await db.collection('artifacts').doc(appId).collection('public').doc('data').collection(COL_CLASSES).add({ name, grade, classNum, createdAt: Date.now() });
+                                                        showMsg('학급이 등록되었습니다!');
+                                                        setIsClassAddOpen(false);
+                                                    } else {
+                                                        alert('모든 항목을 입력해주세요.');
+                                                    }
+                                                } catch (error) {
+                                                    console.error('학급 등록 에러:', error);
+                                                    alert('학급 등록 중 오류가 발생했습니다: ' + error.message);
+                                                }
+                                            }} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold transition hover:bg-indigo-700 shadow-md">생성</button>
+                                            <button onClick={() => setIsClassAddOpen(false)} className="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold">취소</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {view === 'teacher-roster' && (
+                        <div className="min-h-screen bg-slate-50 p-6 md:p-10 text-left">
+                            <div className="max-w-4xl mx-auto">
+                                <header className="flex justify-between items-center mb-10 text-slate-800">
+                                    <button onClick={() => setView('teacher-main')} className="flex items-center gap-2 text-slate-500 font-bold hover:text-indigo-600 transition"><Icon name="ChevronLeft" size={18}/> 돌아가기</button>
+                                    <h2 className="text-2xl font-black">{selectedClass?.name} 명렬표</h2>
+                                    <button onClick={() => setIsRosterBatchOpen(true)} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition hover:bg-indigo-700"><Icon name="Copy" size={18}/> 일괄 등록</button>
+                                </header>
+                                {isRosterBatchOpen && (
+                                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-6 text-slate-800">
+                                        <div className="bg-white w-full max-w-lg rounded-[2.5rem] p-10 shadow-2xl">
+                                            <h3 className="text-2xl font-black mb-4">학생 명렬표 일괄 등록</h3>
+                                            <textarea value={batchText} onChange={e=>setBatchText(e.target.value)} placeholder="1, 홍길동&#10;2, 김철수" className="w-full h-64 p-5 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-indigo-500 font-mono text-sm mb-6 shadow-inner" />
+                                            <div className="flex gap-3">
+                                                <button onClick={async () => {
+                                                    try {
+                                                        const lines = batchText.split('\n').filter(line => line.trim());
+                                                        if (lines.length === 0) {
+                                                            alert('학생 명단을 입력해주세요.');
+                                                            return;
+                                                        }
+                                                        const colRef = db.collection('artifacts').doc(appId).collection('public').doc('data').collection(COL_ROSTER);
+                                                        let count = 0;
+                                                        for (const line of lines) {
+                                                            const parts = line.split(/[,\t/]+/).map(p => p.trim());
+                                                            if (parts.length >= 2) {
+                                                                const num = parts[0];
+                                                                const name = parts[1];
+                                                                const paddedNum = num.padStart(2, '0');
+                                                                const code = `${selectedClass.grade}${selectedClass.classNum}${paddedNum}${name}`;
+                                                                await colRef.add({ name, number: num, code, classId: selectedClass.id, createdAt: Date.now() });
+                                                                count++;
+                                                            }
+                                                        }
+                                                        showMsg(`${count}명의 학생이 등록되었습니다!`);
+                                                        setIsRosterBatchOpen(false);
+                                                        setBatchText('');
+                                                    } catch (error) {
+                                                        console.error('학생 등록 에러:', error);
+                                                        alert('학생 등록 중 오류가 발생했습니다: ' + error.message);
+                                                    }
+                                                }} className="flex-1 bg-indigo-600 text-white py-4 rounded-2xl font-bold shadow-lg">등록 및 코드 생성</button>
+                                                <button onClick={() => { setIsRosterBatchOpen(false); setBatchText(''); }} className="flex-1 bg-slate-100 text-slate-500 py-4 rounded-2xl font-bold">취소</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden text-slate-800">
+                                    <table className="w-full text-left font-sans">
+                                        <thead className="bg-slate-50 text-slate-400 text-[10px] font-black uppercase tracking-widest border-b">
+                                            <tr><th className="px-8 py-5">번호</th><th className="px-8 py-5">성명</th><th className="px-8 py-5">입장 코드</th><th className="px-8 py-5 text-right">삭제</th></tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {roster.filter(s => s.classId === selectedClass?.id).sort((a,b)=>a.number.localeCompare(b.number, undefined, {numeric: true})).map(s => (
+                                                <tr key={s.id} className="group hover:bg-slate-50 transition">
+                                                    <td className="px-8 py-4 font-mono text-slate-400">{s.number}번</td>
+                                                    <td className="px-8 py-4 font-black">{s.name}</td>
+                                                    <td className="px-8 py-4"><span className="bg-emerald-50 px-4 py-2 rounded-xl font-mono text-emerald-700 font-black border border-emerald-100">{s.code}</span></td>
+                                                    <td className="px-8 py-4 text-right"><button onClick={async ()=>await db.collection('artifacts').doc(appId).collection('public').doc('data').collection(COL_ROSTER).doc(s.id).delete()} className="text-red-200 hover:text-red-500 transition opacity-0 group-hover:opacity-100"><Icon name="Trash2" size={16}/></button></td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'teacher-edit' && <TeacherQuizEditor selectedSet={selectedSet} setSelectedSet={setSelectedSet} setView={setView} formatDateTime={formatDateTime} appId={appId} db={db} showMsg={showMsg} />}
+                    {view === 'teacher-stats' && (
+                        <div className="min-h-screen bg-slate-50 p-6 md:p-10 text-left text-slate-800">
+                            <div className="max-w-6xl mx-auto">
+                                <header className="flex justify-between items-center mb-10">
+                                    <button onClick={() => setView('teacher-main')} className="flex items-center gap-2 text-slate-500 font-bold hover:text-indigo-600 transition"><Icon name="ChevronLeft" size={18}/> 돌아가기</button>
+                                    <h2 className="text-2xl font-black">{selectedSet?.title} 분석</h2>
+                                    <button onClick={async () => { if(confirm('삭제하시겠습니까?')) { await db.collection('artifacts').doc(appId).collection('public').doc('data').collection(COL_PROBLEMS).doc(selectedSet.id).delete(); setView('teacher-main'); } }} className="text-red-400 hover:text-red-600 transition"><Icon name="Trash2" size={20}/></button>
+                                </header>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-slate-800">
+                                    <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200">
+                                        <h3 className="font-bold mb-6 border-b pb-4 flex items-center gap-2 text-indigo-600"><Icon name="Users" size={20}/> 학생별 성취 현황</h3>
+                                        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2 custom-scroll">
+                                            {results.filter(r => r.setId === selectedSet?.id).sort((a,b)=>b.timestamp-a.timestamp).map((r, i) => (
+                                                <div key={i} className="p-5 bg-slate-50 rounded-2xl border flex justify-between items-center group">
+                                                    <div><div className="font-black text-slate-800">{r.studentName}</div><div className="text-[10px] text-slate-400 font-bold uppercase italic">{r.submittedAt}</div></div>
+                                                    <div className="text-3xl font-black text-indigo-600 italic tracking-tighter">{r.score}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-10 rounded-[2.5rem] shadow-sm border border-slate-200">
+                                        <h3 className="font-bold mb-6 border-b pb-4 flex items-center gap-2 text-emerald-600"><Icon name="Layers" size={20}/> 문항 분석</h3>
+                                        <div className="space-y-6">
+                                            {selectedSet?.problems?.map((p, i) => {
+                                                const ans = results.filter(r => r.setId === selectedSet?.id).flatMap(r => r.detailedAnswers || []).filter(da => da.questionIndex === i);
+                                                const corrects = ans.filter(da => da.isCorrect).length;
+                                                const rate = ans.length > 0 ? Math.round(corrects/ans.length*100) : 0;
+                                                return (
+                                                    <div key={i}>
+                                                        <div className="flex justify-between mb-2 text-sm font-bold text-slate-700"><span className="text-slate-700 truncate max-w-[70%] text-sm">Q{i+1}. {p.question}</span><span className={rate > 70 ? 'text-emerald-500' : 'text-orange-500'}>{rate}%</span></div>
+                                                        <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden"><div className={`h-full transition-all duration-1000 ${rate > 70 ? 'bg-emerald-500' : 'bg-orange-500'}`} style={{width: `${rate}%`}}></div></div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'student-class-select' && (
+                        <div className="min-h-screen bg-orange-50 flex items-center justify-center p-6 text-center text-slate-800">
+                            <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-sm w-full border-b-8 border-orange-200">
+                                <div className="bg-orange-100 w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-6 text-orange-600"><Icon name="GraduationCap" size={32} /></div>
+                                <h2 className="text-2xl font-black mb-8 tracking-tighter">자신의 반을 선택하세요</h2>
+                                <div className="space-y-3">
+                                    {classes.map(c => (
+                                        <button key={c.id} onClick={() => { setSelectedClass(c); setView('student-login'); }} className="w-full p-5 bg-slate-50 rounded-2xl border-2 border-slate-100 hover:border-orange-400 font-black text-lg transition flex justify-between items-center group">
+                                            {c.name}<Icon name="ChevronRight" size={18} className="text-slate-300 group-hover:text-orange-400"/>
+                                        </button>
+                                    ))}
+                                    <button onClick={()=>setView('home')} className="w-full text-slate-300 text-xs font-bold uppercase mt-6 tracking-widest hover:text-orange-400 transition font-sans">Back to Main</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'student-login' && <StudentLoginView selectedClass={selectedClass} studentCodeInput={studentCodeInput} setStudentCodeInput={setStudentCodeInput} handleStudentLogin={handleStudentLogin} setView={setView} />}
+                    {view === 'student-setup' && (
+                        <div className="min-h-screen bg-sky-50 flex items-center justify-center p-6 text-center text-slate-800 font-sans">
+                            <div className="bg-white p-10 rounded-[3rem] shadow-2xl max-w-md w-full border-b-8 border-sky-200">
+                                <h2 className="text-3xl font-black mb-2 tracking-tighter italic">Hello, {currentStudent?.name}!</h2>
+                                <p className="text-slate-500 font-medium mb-10 italic underline underline-offset-4 decoration-sky-200">오늘 정복할 퀴즈를 골라볼까?</p>
+                                <div className="space-y-3 mb-8 max-h-[300px] overflow-y-auto pr-2 text-left custom-scroll text-slate-800">
+                                    {problemSets.sort((a,b)=>b.updatedAt - a.updatedAt).map(s => (
+                                        <button key={s.id} onClick={() => setSelectedSet(s)} className={`w-full p-6 rounded-2xl border-2 text-left transition-all hover:scale-[1.02] ${selectedSet?.id === s.id ? 'bg-sky-500 border-sky-400 text-white font-bold shadow-xl' : 'bg-white border-slate-100 hover:border-sky-200'}`}>
+                                            <div className="text-[10px] font-black uppercase opacity-70 mb-1 tracking-widest">{s.problems?.length} Questions</div>
+                                            <div className="text-lg font-black tracking-tight">{s.title}</div>
+                                        </button>
+                                    ))}
+                                </div>
+                                <button disabled={!selectedSet} onClick={() => setView('student-game')} className="w-full bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 text-white font-black py-5 rounded-2xl shadow-lg transition transform active:scale-95 text-xl tracking-tight">도전 시작!</button>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'student-game' && <WhackAMoleGame selectedSet={selectedSet} currentStudent={currentStudent} selectedClass={selectedClass} setView={setView} setSelectedSet={setSelectedSet} formatDateTime={formatDateTime} db={db} appId={appId} />}
+                    {view === 'student-result' && (
+                        <div className="min-h-screen bg-indigo-50 flex items-center justify-center p-6 text-center text-slate-800 font-sans">
+                            <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl max-sm:w-full max-w-sm border-b-8 border-indigo-200">
+                                <div className="text-7xl mb-8 animate-bounce-slow">🏆</div>
+                                <h2 className="text-3xl font-black mb-4 tracking-tighter italic text-indigo-600">{currentStudent?.name} 학생, 클리어!</h2>
+                                <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-8">
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">FINAL SCORE</div>
+                                    <div className="text-6xl font-black text-slate-800 tracking-tighter">{selectedSet?.result?.score}점</div>
+                                </div>
+                                <button onClick={()=>setView('home')} className="w-full bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-indigo-700 transition transform active:scale-95 text-xl">확인</button>
+                            </div>
+                        </div>
+                    )}
+                    {msg && <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-red-600 text-white px-8 py-4 rounded-3xl font-black shadow-2xl animate-bounce z-[200]">{msg}</div>}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
