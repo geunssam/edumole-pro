@@ -1,0 +1,24 @@
+{
+  "games": [
+    {
+      "id": "mole",
+      "title": "두더지 잡기",
+      "subtitle": "Whack-a-Mole",
+      "description": "퀴즈 정답이 적힌 두더지를 잡아라!",
+      "path": "/games/mole/",
+      "color": "#6366f1",
+      "iconName": "target",
+      "status": "active"
+    },
+    {
+      "id": "runner",
+      "title": "끝없는 달리기",
+      "subtitle": "Endless Runner",
+      "description": "달리면서 퀴즈를 풀어라!",
+      "path": "/games/runner/",
+      "color": "#f97316",
+      "iconName": "zap",
+      "status": "coming_soon"
+    }
+  ]
+}

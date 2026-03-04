@@ -1,0 +1,47 @@
+{
+  "version": "2.0",
+  "lastUpdated": "2026-02-20T14:09:11.983Z",
+  "activeFeatures": [
+    "public"
+  ],
+  "primaryFeature": "public",
+  "features": {
+    "public": {
+      "phase": "do",
+      "phaseNumber": 3,
+      "matchRate": null,
+      "iterationCount": 0,
+      "requirements": [],
+      "documents": {},
+      "timestamps": {
+        "started": "2026-02-20T14:09:00.481Z",
+        "lastUpdated": "2026-02-20T14:09:11.983Z"
+      },
+      "lastFile": "/Users/iwongeun/Desktop/edumole-pro/public/firebase-config.example.js"
+    }
+  },
+  "pipeline": {
+    "currentPhase": 1,
+    "level": "Dynamic",
+    "phaseHistory": []
+  },
+  "session": {
+    "startedAt": "2026-02-20T11:16:42.037Z",
+    "onboardingCompleted": false,
+    "lastActivity": "2026-02-20T14:09:11.983Z"
+  },
+  "history": [
+    {
+      "timestamp": "2026-02-20T14:09:00.481Z",
+      "feature": "public",
+      "phase": "do",
+      "action": "updated"
+    },
+    {
+      "timestamp": "2026-02-20T14:09:11.983Z",
+      "feature": "public",
+      "phase": "do",
+      "action": "updated"
+    }
+  ]
+}

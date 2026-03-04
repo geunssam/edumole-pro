@@ -4,3 +4,6 @@ node_modules/
 .DS_Store
 firebase-debug.log
 *.log
+
+# Firebase API 키 설정 파일 (보안)
+public/firebase-config.js

@@ -14,6 +14,30 @@
     ],
     "rewrites": [
       {
+        "source": "/dashboard",
+        "destination": "/dashboard.html"
+      },
+      {
+        "source": "/dashboard/**",
+        "destination": "/dashboard.html"
+      },
+      {
+        "source": "/games/mole",
+        "destination": "/games/mole/index.html"
+      },
+      {
+        "source": "/games/mole/**",
+        "destination": "/games/mole/index.html"
+      },
+      {
+        "source": "/games/runner",
+        "destination": "/games/runner/index.html"
+      },
+      {
+        "source": "/games/runner/**",
+        "destination": "/games/runner/index.html"
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

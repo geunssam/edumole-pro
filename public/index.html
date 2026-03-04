@@ -30,20 +30,8 @@
         .grid-input:focus { background-color: rgba(255, 255, 255, 0.2); }
     </style>
 
-    <script>
-        // ✅ Firebase 설정 (MCP로 자동 생성됨)
-        window.firebaseConfig = {
-            apiKey: "AIzaSyD4AJdh54Z9PvUVDdT0jt6gRSHMOMxz3io",
-            authDomain: "edumole-pro.firebaseapp.com",
-            projectId: "edumole-pro",
-            storageBucket: "edumole-pro.firebasestorage.app",
-            messagingSenderId: "732850379958",
-            appId: "1:732850379958:web:8e68fdf5133fe2e542da17"
-        };
-
-        // 앱 고유 ID
-        window.APP_ID = 'edu-mole-pro-v6';
-    </script>
+    <!-- Firebase 설정 (별도 파일로 분리, .gitignore에 포함) -->
+    <script src="firebase-config.js"></script>
 </head>
 <body class="bg-slate-50 antialiased overflow-x-hidden">
     <div id="root"></div>

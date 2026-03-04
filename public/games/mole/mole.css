@@ -1,0 +1,22 @@
+/* ─── 두더지 잡기 전용 스타일 ─── */
+/* Phase 3에서 index.html 분리 시 구현 */
+
+.mole-hole {
+    background: rgba(69, 26, 3, 0.4);
+    box-shadow: inset 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.mole-bounce {
+    animation: mole-bounce 1s infinite;
+}
+
+@keyframes mole-bounce {
+    0%, 100% {
+        transform: translateY(-5%);
+        animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+    50% {
+        transform: none;
+        animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+}
