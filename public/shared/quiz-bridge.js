@@ -1,24 +1,43 @@
 /**
  * EduMole Pro - QuizBridge (핵심 데이터 모듈)
- * 퀴즈 세트 관리, 세션 관리, 결과 저장/조회
+ * 퀴즈 세트 관리, 세션 관리, 결과 저장/조회, 학급/명렬표
  *
- * 의존: constants.js (window.EDUMOLE), firebase-init.js (window.firebaseDB)
+ * v2: 교사 중심 데이터 모델
+ *   - 퀴즈/학급/학생 → teachers/{uid}/ 하위 컬렉션
+ *   - 세션/결과 → 최상위 컬렉션
+ *
+ * 의존: constants.js (window.EDUMOLE), firebase-init.js (window.firebaseDB),
+ *       auth.js (window.EduAuth)
  */
 (function () {
     'use strict';
 
     var db = window.firebaseDB;
     var EDUMOLE = window.EDUMOLE;
-    var COLS = EDUMOLE.COLLECTIONS;
+    var TCOLS = EDUMOLE.TEACHER_SUBCOLLECTIONS;
+    var TOP = EDUMOLE.TOP_COLLECTIONS;
 
-    // ─── 퀴즈 세트 관련 ───
+    /**
+     * 현재 교사 UID를 반환 (없으면 에러)
+     * @private
+     */
+    function _requireTeacherUid() {
+        var uid = window.EduAuth.getTeacherUid();
+        if (!uid) throw new Error('QuizBridge: 교사 로그인이 필요합니다.');
+        return uid;
+    }
+
+    // ═══════════════════════════════════════
+    //  퀴즈 세트 (teachers/{uid}/quizSets)
+    // ═══════════════════════════════════════
 
     /**
      * 퀴즈 세트 목록 조회
-     * @returns {Promise<Array>} [{id, title, problems, moleCount, timeLimit, ...}]
+     * @returns {Promise<Array>}
      */
     async function getQuizSets() {
-        var snapshot = await EDUMOLE.getCollection(db, COLS.PROBLEM_SETS).get();
+        var uid = _requireTeacherUid();
+        var snapshot = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.QUIZ_SETS).get();
         return snapshot.docs.map(function (doc) {
             return Object.assign({ id: doc.id }, doc.data());
         });
@@ -26,20 +45,66 @@
 
     /**
      * 특정 퀴즈 세트 로드
-     * @param {string} setId - 퀴즈 세트 문서 ID
+     * @param {string} setId
      * @returns {Promise<Object|null>}
      */
     async function loadQuizSet(setId) {
-        var doc = await EDUMOLE.getCollection(db, COLS.PROBLEM_SETS).doc(setId).get();
+        var uid = _requireTeacherUid();
+        var doc = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.QUIZ_SETS).doc(setId).get();
         if (!doc.exists) return null;
         return Object.assign({ id: doc.id }, doc.data());
     }
 
     /**
+     * 퀴즈 세트 생성
+     * @param {Object} data - { title, problems, timeLimit }
+     * @returns {Promise<string>} 생성된 문서 ID
+     */
+    async function createQuizSet(data) {
+        var uid = _requireTeacherUid();
+        var setData = {
+            title: data.title || '',
+            problems: data.problems || [],
+            problemCount: (data.problems || []).length,
+            timeLimit: data.timeLimit || 30,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        var docRef = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.QUIZ_SETS).add(setData);
+        return docRef.id;
+    }
+
+    /**
+     * 퀴즈 세트 수정
+     * @param {string} setId
+     * @param {Object} data - 수정할 필드
+     * @returns {Promise<void>}
+     */
+    async function updateQuizSet(setId, data) {
+        var uid = _requireTeacherUid();
+        var updateData = Object.assign({}, data, {
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        if (data.problems) {
+            updateData.problemCount = data.problems.length;
+        }
+        await EDUMOLE.getTeacherCollection(db, uid, TCOLS.QUIZ_SETS).doc(setId).update(updateData);
+    }
+
+    /**
+     * 퀴즈 세트 삭제
+     * @param {string} setId
+     * @returns {Promise<void>}
+     */
+    async function deleteQuizSet(setId) {
+        var uid = _requireTeacherUid();
+        await EDUMOLE.getTeacherCollection(db, uid, TCOLS.QUIZ_SETS).doc(setId).delete();
+    }
+
+    // ─── 퀴즈 유틸리티 (순수 함수, DB 무관) ───
+
+    /**
      * 다음 문제 가져오기
-     * @param {Array} problems - 문제 배열
-     * @param {Object} options - { mode: 'sequential'|'random', currentIndex: number }
-     * @returns {{ question: Object, index: number } | null}
      */
     function getNextQuestion(problems, options) {
         var opts = options || {};
@@ -53,21 +118,14 @@
             nextIndex = Math.floor(Math.random() * problems.length);
         } else {
             nextIndex = currentIndex + 1;
-            if (nextIndex >= problems.length) return null; // 모든 문제 소진
+            if (nextIndex >= problems.length) return null;
         }
 
-        return {
-            question: problems[nextIndex],
-            index: nextIndex
-        };
+        return { question: problems[nextIndex], index: nextIndex };
     }
 
     /**
      * 정답 확인
-     * @param {Array} problems - 문제 배열
-     * @param {number} questionIndex - 문제 인덱스
-     * @param {string} answer - 학생이 선택한 답
-     * @returns {boolean}
      */
     function checkAnswer(problems, questionIndex, answer) {
         if (!problems || !problems[questionIndex]) return false;
@@ -76,15 +134,11 @@
 
     /**
      * 선택지 생성 (정답 + 오답 섞기)
-     * @param {Array} problems - 문제 배열
-     * @param {number} questionIndex - 문제 인덱스
-     * @returns {Array<string>} 섞인 선택지 배열
      */
     function getChoices(problems, questionIndex) {
         if (!problems || !problems[questionIndex]) return [];
         var q = problems[questionIndex];
         var choices = [q.answer].concat(q.distractors || []);
-        // Fisher-Yates 셔플
         for (var i = choices.length - 1; i > 0; i--) {
             var j = Math.floor(Math.random() * (i + 1));
             var temp = choices[i];
@@ -94,46 +148,52 @@
         return choices;
     }
 
-    // ─── 세션 관련 ───
+    // ═══════════════════════════════════════
+    //  세션 (sessions/ 최상위)
+    // ═══════════════════════════════════════
 
     /**
      * 게임 세션 생성
      * @param {Object} params
-     * @param {string} params.pin - 4자리 방 코드
-     * @param {string} params.gameType - 게임 타입 (GAME_TYPES)
-     * @param {string} params.quizSetId - 퀴즈 세트 ID
-     * @param {string} params.quizSetTitle - 퀴즈 세트 제목
-     * @param {string} params.classId - 학급 ID
-     * @param {string} params.className - 학급 이름
-     * @param {Object} [params.settings] - 게임별 설정
-     * @returns {Promise<string>} 생성된 세션 문서 ID
+     * @returns {Promise<string>} 생성된 세션 ID
      */
     async function createSession(params) {
+        var uid = _requireTeacherUid();
+
+        // 퀴즈 데이터를 세션에 복사 (학생은 이 문서만 읽으면 됨)
+        var quizSet = null;
+        if (params.quizSetId) {
+            quizSet = await loadQuizSet(params.quizSetId);
+        }
+
         var sessionData = {
+            teacherId: uid,
             pin: params.pin,
-            gameType: params.gameType,
-            quizSetId: params.quizSetId,
-            quizSetTitle: params.quizSetTitle || '',
-            classId: params.classId,
+            gameType: params.gameType || EDUMOLE.GAME_TYPES.MOLE,
+            status: EDUMOLE.SESSION_STATUS.WAITING,
+            quizSetId: params.quizSetId || '',
+            quizSetTitle: params.quizSetTitle || (quizSet ? quizSet.title : ''),
+            problems: quizSet ? quizSet.problems : (params.problems || []),
+            classId: params.classId || '',
             className: params.className || '',
-            status: EDUMOLE.SESSION_STATUS.ACTIVE,
+            dateStr: EDUMOLE.formatDateStr(),
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            settings: params.settings || {}
+            settings: params.settings || EDUMOLE.GAME_DEFAULTS[params.gameType || 'mole'] || {}
         };
 
-        var docRef = await EDUMOLE.getCollection(db, COLS.GAME_SESSIONS).add(sessionData);
+        var docRef = await EDUMOLE.getTopCollection(db, TOP.SESSIONS).add(sessionData);
         return docRef.id;
     }
 
     /**
-     * PIN으로 활성 세션 조회
-     * @param {string} pin - 4자리 PIN
-     * @returns {Promise<Object|null>} 세션 데이터 또는 null
+     * PIN으로 활성 세션 조회 (학생용 - 인증 불필요)
+     * @param {string} pin
+     * @returns {Promise<Object|null>}
      */
     async function findSessionByPin(pin) {
-        var snapshot = await EDUMOLE.getCollection(db, COLS.GAME_SESSIONS)
+        var snapshot = await EDUMOLE.getTopCollection(db, TOP.SESSIONS)
             .where('pin', '==', pin)
-            .where('status', '==', EDUMOLE.SESSION_STATUS.ACTIVE)
+            .where('status', 'in', [EDUMOLE.SESSION_STATUS.WAITING, EDUMOLE.SESSION_STATUS.PLAYING])
             .limit(1)
             .get();
 
@@ -143,25 +203,44 @@
     }
 
     /**
-     * 세션 종료
-     * @param {string} sessionId - 세션 문서 ID
+     * 세션 상태 업데이트
+     * @param {string} sessionId
+     * @param {string} status - SESSION_STATUS 값
      * @returns {Promise<void>}
      */
-    async function endSession(sessionId) {
-        await EDUMOLE.getCollection(db, COLS.GAME_SESSIONS)
-            .doc(sessionId)
-            .update({ status: EDUMOLE.SESSION_STATUS.ENDED });
+    async function updateSessionStatus(sessionId, status) {
+        await EDUMOLE.getTopCollection(db, TOP.SESSIONS).doc(sessionId).update({
+            status: status
+        });
     }
 
     /**
-     * 활성 세션 목록 조회
+     * 세션 종료
+     * @param {string} sessionId
+     * @returns {Promise<void>}
+     */
+    async function endSession(sessionId) {
+        await updateSessionStatus(sessionId, EDUMOLE.SESSION_STATUS.ENDED);
+    }
+
+    /**
+     * 교사의 세션 히스토리 조회
+     * @param {Object} [filters] - { dateFrom, dateTo }
      * @returns {Promise<Array>}
      */
-    async function getActiveSessions() {
-        var snapshot = await EDUMOLE.getCollection(db, COLS.GAME_SESSIONS)
-            .where('status', '==', EDUMOLE.SESSION_STATUS.ACTIVE)
-            .get();
+    async function getSessionHistory(filters) {
+        var uid = _requireTeacherUid();
+        var ref = EDUMOLE.getTopCollection(db, TOP.SESSIONS)
+            .where('teacherId', '==', uid);
 
+        if (filters && filters.dateFrom) {
+            ref = ref.where('dateStr', '>=', filters.dateFrom);
+        }
+        if (filters && filters.dateTo) {
+            ref = ref.where('dateStr', '<=', filters.dateTo);
+        }
+
+        var snapshot = await ref.orderBy('dateStr', 'desc').get();
         return snapshot.docs.map(function (doc) {
             return Object.assign({ id: doc.id }, doc.data());
         });
@@ -169,8 +248,7 @@
 
     /**
      * 사용 가능한 유니크 PIN 생성
-     * 활성 세션 중 중복되지 않는 PIN을 찾을 때까지 반복
-     * @returns {Promise<string>} 유니크한 4자리 PIN
+     * @returns {Promise<string>}
      */
     async function generateUniquePin() {
         var maxAttempts = 20;
@@ -179,72 +257,141 @@
             var existing = await findSessionByPin(pin);
             if (!existing) return pin;
         }
-        // 극히 드문 경우: 20번 시도 후에도 중복이면 그냥 반환
         return EDUMOLE.generatePin();
     }
 
-    // ─── 결과 관련 ───
+    // ═══════════════════════════════════════
+    //  결과 (results/ 최상위)
+    // ═══════════════════════════════════════
 
     /**
-     * 게임 결과 저장
-     * @param {string} gameType - 게임 타입
-     * @param {string} sessionId - 세션 ID
-     * @param {Object} resultData - 결과 데이터 (score, correctCount, 등)
-     * @returns {Promise<string>} 저장된 문서 ID
+     * 게임 결과 저장 (학생이 호출 - 인증 불필요)
+     * @param {Object} resultData
+     * @returns {Promise<string>}
      */
-    async function saveResult(gameType, sessionId, resultData) {
-        var data = Object.assign({}, resultData, {
-            gameType: gameType || EDUMOLE.GAME_TYPES.MOLE,
-            sessionId: sessionId || '',
-            timestamp: Date.now(),
-            submittedAt: EDUMOLE.formatDateTime()
-        });
+    async function saveResult(resultData) {
+        var data = {
+            teacherId: resultData.teacherId || '',
+            sessionId: resultData.sessionId || '',
+            classId: resultData.classId || '',
+            setId: resultData.setId || '',
+            studentName: resultData.studentName || '',
+            studentCode: resultData.studentCode || '',
+            gameType: resultData.gameType || EDUMOLE.GAME_TYPES.MOLE,
+            className: resultData.className || '',
+            quizSetTitle: resultData.quizSetTitle || '',
+            score: resultData.score || 0,
+            correctCount: resultData.correctCount || 0,
+            totalCount: resultData.totalCount || 0,
+            detailedAnswers: resultData.detailedAnswers || [],
+            dateStr: EDUMOLE.formatDateStr(),
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        };
 
-        var docRef = await EDUMOLE.getCollection(db, COLS.GAME_RESULTS).add(data);
+        var docRef = await EDUMOLE.getTopCollection(db, TOP.RESULTS).add(data);
         return docRef.id;
     }
 
     /**
-     * 결과 조회 (필터링 지원)
-     * @param {Object} [filters] - { gameType, sessionId, classId, setId }
+     * 결과 조회 (교사용 - 복합 필터 지원)
+     * @param {Object} [filters] - { sessionId, classId, setId, studentCode, dateFrom, dateTo }
      * @returns {Promise<Array>}
      */
     async function getResults(filters) {
-        var ref = EDUMOLE.getCollection(db, COLS.GAME_RESULTS);
+        var uid = _requireTeacherUid();
+        var ref = EDUMOLE.getTopCollection(db, TOP.RESULTS)
+            .where('teacherId', '==', uid);
 
         if (filters) {
-            if (filters.gameType) ref = ref.where('gameType', '==', filters.gameType);
             if (filters.sessionId) ref = ref.where('sessionId', '==', filters.sessionId);
             if (filters.classId) ref = ref.where('classId', '==', filters.classId);
             if (filters.setId) ref = ref.where('setId', '==', filters.setId);
+            if (filters.studentCode) ref = ref.where('studentCode', '==', filters.studentCode);
+            if (filters.dateFrom) ref = ref.where('dateStr', '>=', filters.dateFrom);
+            if (filters.dateTo) ref = ref.where('dateStr', '<=', filters.dateTo);
         }
 
-        var snapshot = await ref.orderBy('timestamp', 'desc').get();
+        // studentCode 필터 시 timestamp 정렬, 나머지는 dateStr 정렬
+        var snapshot;
+        if (filters && filters.studentCode) {
+            snapshot = await ref.orderBy('timestamp', 'desc').get();
+        } else {
+            snapshot = await ref.orderBy('dateStr', 'desc').get();
+        }
+
         return snapshot.docs.map(function (doc) {
             return Object.assign({ id: doc.id }, doc.data());
         });
     }
 
-    // ─── 학급/명렬표 관련 ───
+    // ═══════════════════════════════════════
+    //  학급 (teachers/{uid}/classes)
+    // ═══════════════════════════════════════
 
     /**
      * 학급 목록 조회
      * @returns {Promise<Array>}
      */
     async function getClasses() {
-        var snapshot = await EDUMOLE.getCollection(db, COLS.CLASSES).get();
+        var uid = _requireTeacherUid();
+        var snapshot = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.CLASSES).get();
         return snapshot.docs.map(function (doc) {
             return Object.assign({ id: doc.id }, doc.data());
         });
     }
 
     /**
-     * 특정 학급의 명렬표 조회
-     * @param {string} classId - 학급 ID
+     * 학급 생성
+     * @param {Object} data - { name, grade, classNum, year }
+     * @returns {Promise<string>}
+     */
+    async function createClass(data) {
+        var uid = _requireTeacherUid();
+        var classData = {
+            name: data.name || '',
+            grade: Number(data.grade) || 0,
+            classNum: Number(data.classNum) || 0,
+            year: data.year || new Date().getFullYear(),
+            studentCount: 0,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        var docRef = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.CLASSES).add(classData);
+        return docRef.id;
+    }
+
+    /**
+     * 학급 수정
+     * @param {string} classId
+     * @param {Object} data
+     * @returns {Promise<void>}
+     */
+    async function updateClass(classId, data) {
+        var uid = _requireTeacherUid();
+        await EDUMOLE.getTeacherCollection(db, uid, TCOLS.CLASSES).doc(classId).update(data);
+    }
+
+    /**
+     * 학급 삭제
+     * @param {string} classId
+     * @returns {Promise<void>}
+     */
+    async function deleteClass(classId) {
+        var uid = _requireTeacherUid();
+        await EDUMOLE.getTeacherCollection(db, uid, TCOLS.CLASSES).doc(classId).delete();
+    }
+
+    // ═══════════════════════════════════════
+    //  학생 명렬표 (teachers/{uid}/students)
+    // ═══════════════════════════════════════
+
+    /**
+     * 특정 학급의 학생 목록 조회
+     * @param {string} classId
      * @returns {Promise<Array>}
      */
-    async function getRoster(classId) {
-        var snapshot = await EDUMOLE.getCollection(db, COLS.ROSTER)
+    async function getStudents(classId) {
+        var uid = _requireTeacherUid();
+        var snapshot = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.STUDENTS)
             .where('classId', '==', classId)
             .get();
 
@@ -254,13 +401,68 @@
     }
 
     /**
-     * 입장코드로 학생 검증
-     * @param {string} classId - 학급 ID
-     * @param {string} code - 입장코드 (예: "6102홍길동")
-     * @returns {Promise<Object|null>} 학생 정보 또는 null
+     * 학생 추가
+     * @param {Object} data - { name, number, classId, code }
+     * @returns {Promise<string>}
      */
-    async function verifyStudentCode(classId, code) {
-        var snapshot = await EDUMOLE.getCollection(db, COLS.ROSTER)
+    async function addStudent(data) {
+        var uid = _requireTeacherUid();
+        var studentData = {
+            name: data.name || '',
+            number: Number(data.number) || 0,
+            classId: data.classId || '',
+            code: data.code || '',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        };
+        var docRef = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.STUDENTS).add(studentData);
+
+        // 학급의 studentCount 업데이트
+        if (data.classId) {
+            await _updateStudentCount(uid, data.classId);
+        }
+
+        return docRef.id;
+    }
+
+    /**
+     * 학생 삭제
+     * @param {string} studentId
+     * @param {string} classId - 학급 ID (studentCount 갱신용)
+     * @returns {Promise<void>}
+     */
+    async function removeStudent(studentId, classId) {
+        var uid = _requireTeacherUid();
+        await EDUMOLE.getTeacherCollection(db, uid, TCOLS.STUDENTS).doc(studentId).delete();
+
+        if (classId) {
+            await _updateStudentCount(uid, classId);
+        }
+    }
+
+    /**
+     * 학급의 학생 수 갱신 (비정규화 캐시)
+     * @private
+     */
+    async function _updateStudentCount(uid, classId) {
+        var snapshot = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.STUDENTS)
+            .where('classId', '==', classId)
+            .get();
+
+        await EDUMOLE.getTeacherCollection(db, uid, TCOLS.CLASSES).doc(classId).update({
+            studentCount: snapshot.size
+        });
+    }
+
+    /**
+     * 입장코드로 학생 검증 (학생 입장 시 사용)
+     * 세션 정보로 교사 UID를 얻어 검증
+     * @param {string} teacherUid - 세션의 teacherId
+     * @param {string} classId
+     * @param {string} code - 입장코드
+     * @returns {Promise<Object|null>}
+     */
+    async function verifyStudentCode(teacherUid, classId, code) {
+        var snapshot = await EDUMOLE.getTeacherCollection(db, teacherUid, TCOLS.STUDENTS)
             .where('classId', '==', classId)
             .where('code', '==', code)
             .limit(1)
@@ -271,26 +473,43 @@
         return Object.assign({ id: doc.id }, doc.data());
     }
 
+    // ─── 하위 호환 래퍼 ───
+
+    /** @deprecated getRoster → getStudents */
+    var getRoster = getStudents;
+
     // 전역 객체로 노출
     window.QuizBridge = {
         // 퀴즈
         getQuizSets: getQuizSets,
         loadQuizSet: loadQuizSet,
+        createQuizSet: createQuizSet,
+        updateQuizSet: updateQuizSet,
+        deleteQuizSet: deleteQuizSet,
         getNextQuestion: getNextQuestion,
         checkAnswer: checkAnswer,
         getChoices: getChoices,
         // 세션
         createSession: createSession,
         findSessionByPin: findSessionByPin,
+        updateSessionStatus: updateSessionStatus,
         endSession: endSession,
-        getActiveSessions: getActiveSessions,
+        getSessionHistory: getSessionHistory,
         generateUniquePin: generateUniquePin,
         // 결과
         saveResult: saveResult,
         getResults: getResults,
-        // 학급/명렬표
+        // 학급
         getClasses: getClasses,
-        getRoster: getRoster,
-        verifyStudentCode: verifyStudentCode
+        createClass: createClass,
+        updateClass: updateClass,
+        deleteClass: deleteClass,
+        // 학생
+        getStudents: getStudents,
+        addStudent: addStudent,
+        removeStudent: removeStudent,
+        verifyStudentCode: verifyStudentCode,
+        // 하위 호환
+        getRoster: getRoster
     };
 })();

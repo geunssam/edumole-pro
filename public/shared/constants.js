@@ -1,46 +1,121 @@
 /**
  * EduMole Pro - 공유 상수 및 유틸리티
  * 모든 게임과 페이지에서 공통으로 사용하는 상수, 경로 빌더, 유틸 함수
+ *
+ * v2: 교사 중심 데이터 모델 (Google OAuth)
  */
 (function () {
     'use strict';
 
-    const APP_ID = window.APP_ID || 'edu-mole-pro-v6';
+    // ─── 컬렉션 이름 ───
 
-    // Firestore 컬렉션 이름
-    const COLLECTIONS = {
-        PROBLEM_SETS: 'problemSets',
-        GAME_RESULTS: 'gameResults',
-        GAME_SESSIONS: 'gameSessions',
-        ROSTER: 'roster',
+    // 교사 하위 컬렉션 (teachers/{uid}/...)
+    var TEACHER_SUBCOLLECTIONS = {
+        CLASSES: 'classes',
+        STUDENTS: 'students',
+        QUIZ_SETS: 'quizSets'
+    };
+
+    // 최상위 컬렉션
+    var TOP_COLLECTIONS = {
+        TEACHERS: 'teachers',
+        SESSIONS: 'sessions',
+        RESULTS: 'results'
+    };
+
+    // 하위 호환용 (기존 코드가 COLLECTIONS 참조)
+    var COLLECTIONS = {
+        PROBLEM_SETS: 'quizSets',
+        GAME_RESULTS: 'results',
+        GAME_SESSIONS: 'sessions',
+        ROSTER: 'students',
         CLASSES: 'classes'
     };
 
     // 게임 세션 상태
-    const SESSION_STATUS = {
-        ACTIVE: 'active',
+    var SESSION_STATUS = {
+        WAITING: 'waiting',
+        PLAYING: 'playing',
         ENDED: 'ended'
     };
 
     // 게임 타입
-    const GAME_TYPES = {
+    var GAME_TYPES = {
         MOLE: 'mole',
         RUNNER: 'runner'
     };
 
+    // 게임별 기본 설정값
+    var GAME_DEFAULTS = {
+        mole: { moleCount: 6, timeLimit: 30 },
+        runner: { quizInterval: 500, difficulty: 'normal', lives: 3 }
+    };
+
+    // 기존 경로 (마이그레이션용)
+    var LEGACY_APP_ID = 'edu-mole-pro-v6';
+
+    // ─── 경로 빌더 ───
+
     /**
-     * Firestore 컬렉션 참조를 반환
-     * 경로: artifacts/{appId}/public/data/{collectionName}
-     * @param {firebase.firestore.Firestore} db - Firestore 인스턴스
-     * @param {string} collectionName - 컬렉션 이름 (COLLECTIONS 상수 사용)
+     * 교사 프로필 문서 참조
+     * @param {firebase.firestore.Firestore} db
+     * @param {string} uid - 교사 UID
+     * @returns {firebase.firestore.DocumentReference}
+     */
+    function getTeacherDoc(db, uid) {
+        return db.collection('teachers').doc(uid);
+    }
+
+    /**
+     * 교사 하위 컬렉션 참조
+     * 경로: teachers/{uid}/{subcollection}
+     * @param {firebase.firestore.Firestore} db
+     * @param {string} uid - 교사 UID
+     * @param {string} subcollection - 하위 컬렉션 이름 (TEACHER_SUBCOLLECTIONS)
      * @returns {firebase.firestore.CollectionReference}
      */
-    function getCollection(db, collectionName) {
+    function getTeacherCollection(db, uid, subcollection) {
+        return db.collection('teachers').doc(uid).collection(subcollection);
+    }
+
+    /**
+     * 최상위 컬렉션 참조 (sessions, results)
+     * @param {firebase.firestore.Firestore} db
+     * @param {string} collectionName - 컬렉션 이름 (TOP_COLLECTIONS)
+     * @returns {firebase.firestore.CollectionReference}
+     */
+    function getTopCollection(db, collectionName) {
+        return db.collection(collectionName);
+    }
+
+    /**
+     * [하위 호환] 기존 Firestore 경로 참조
+     * 경로: artifacts/{appId}/public/data/{collectionName}
+     * @param {firebase.firestore.Firestore} db
+     * @param {string} collectionName
+     * @returns {firebase.firestore.CollectionReference}
+     */
+    function getLegacyCollection(db, collectionName) {
         return db.collection('artifacts')
-            .doc(APP_ID)
+            .doc(LEGACY_APP_ID)
             .collection('public')
             .doc('data')
             .collection(collectionName);
+    }
+
+    // ─── 유틸리티 ───
+
+    /**
+     * 날짜를 'YYYY-MM-DD' 형식으로 포맷 (필터링용)
+     * @param {Date|number|string} date - 날짜 (기본: 현재)
+     * @returns {string}
+     */
+    function formatDateStr(date) {
+        var d = date ? new Date(date) : new Date();
+        var year = d.getFullYear();
+        var month = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
     }
 
     /**
@@ -50,13 +125,29 @@
      */
     function formatDateTime(date) {
         var d = date ? new Date(date) : new Date();
-        var year = d.getFullYear();
-        var month = String(d.getMonth() + 1).padStart(2, '0');
-        var day = String(d.getDate()).padStart(2, '0');
-        var hours = String(d.getHours()).padStart(2, '0');
-        var minutes = String(d.getMinutes()).padStart(2, '0');
-        var seconds = String(d.getSeconds()).padStart(2, '0');
-        return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
+        return formatDateStr(d) + ' ' +
+            String(d.getHours()).padStart(2, '0') + ':' +
+            String(d.getMinutes()).padStart(2, '0') + ':' +
+            String(d.getSeconds()).padStart(2, '0');
+    }
+
+    /**
+     * 학생 입장코드 생성
+     * 형식: 연도2자리 + 학년 + 반2자리 + 번호2자리 + 이름
+     * 예: "26060201홍길동" (2026년 6학년 2반 1번 홍길동)
+     * @param {number} year - 학년도 (예: 2026)
+     * @param {number} grade - 학년
+     * @param {number} classNum - 반
+     * @param {number} number - 번호
+     * @param {string} name - 이름
+     * @returns {string}
+     */
+    function generateStudentCode(year, grade, classNum, number, name) {
+        var y = String(year).slice(-2);
+        var g = String(grade);
+        var c = String(classNum).padStart(2, '0');
+        var n = String(number).padStart(2, '0');
+        return y + g + c + n + name;
     }
 
     /**
@@ -82,12 +173,25 @@
 
     // 전역 객체로 노출
     window.EDUMOLE = {
-        APP_ID: APP_ID,
+        // 컬렉션 상수
+        TEACHER_SUBCOLLECTIONS: TEACHER_SUBCOLLECTIONS,
+        TOP_COLLECTIONS: TOP_COLLECTIONS,
         COLLECTIONS: COLLECTIONS,
         SESSION_STATUS: SESSION_STATUS,
         GAME_TYPES: GAME_TYPES,
-        getCollection: getCollection,
+        GAME_DEFAULTS: GAME_DEFAULTS,
+        LEGACY_APP_ID: LEGACY_APP_ID,
+
+        // 경로 빌더
+        getTeacherDoc: getTeacherDoc,
+        getTeacherCollection: getTeacherCollection,
+        getTopCollection: getTopCollection,
+        getLegacyCollection: getLegacyCollection,
+
+        // 유틸리티
+        formatDateStr: formatDateStr,
         formatDateTime: formatDateTime,
+        generateStudentCode: generateStudentCode,
         generatePin: generatePin,
         getUrlParams: getUrlParams
     };

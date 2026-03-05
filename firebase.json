@@ -5,6 +5,11 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "emulators": {
+    "hosting": {
+      "port": 5003
+    }
+  },
   "hosting": {
     "public": "public",
     "ignore": [
@@ -13,6 +18,14 @@
       "**/node_modules/**"
     ],
     "rewrites": [
+      {
+        "source": "/hub",
+        "destination": "/hub.html"
+      },
+      {
+        "source": "/hub/**",
+        "destination": "/hub.html"
+      },
       {
         "source": "/dashboard",
         "destination": "/dashboard.html"
@@ -39,7 +52,7 @@
       },
       {
         "source": "**",
-        "destination": "/index.html"
+        "destination": "/hub.html"
       }
     ]
   }

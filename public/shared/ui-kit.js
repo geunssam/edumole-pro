@@ -24,18 +24,18 @@
 
         var toast = document.createElement('div');
         toast.id = 'edumole-toast';
-        toast.className = 'edumole-toast edumole-toast--' + type;
+        toast.className = 'toast toast--' + type;
         toast.textContent = message;
         document.body.appendChild(toast);
 
         // 표시 애니메이션
         requestAnimationFrame(function () {
-            toast.classList.add('edumole-toast--visible');
+            toast.classList.add('toast--visible');
         });
 
         // 자동 제거
         toastTimeout = setTimeout(function () {
-            toast.classList.remove('edumole-toast--visible');
+            toast.classList.remove('toast--visible');
             setTimeout(function () {
                 if (toast.parentNode) toast.parentNode.removeChild(toast);
             }, 300);
@@ -51,10 +51,10 @@
 
         var overlay = document.createElement('div');
         overlay.id = 'edumole-loading';
-        overlay.className = 'edumole-loading-overlay';
+        overlay.className = 'loading-overlay';
         overlay.innerHTML =
-            '<div class="edumole-loading-content">' +
-            '<div class="edumole-spinner"></div>' +
+            '<div class="loading-content">' +
+            '<div class="spinner"></div>' +
             '<p>' + (message || '로딩 중...') + '</p>' +
             '</div>';
         document.body.appendChild(overlay);

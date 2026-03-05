@@ -2,10 +2,41 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // 교사 프로필 — 본인만
+    match /teachers/{uid} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == uid;
+    }
+
+    // 교사 하위 컬렉션 (classes, students, quizSets) — 본인만
+    match /teachers/{uid}/{subcol}/{docId} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == uid;
+    }
+
+    // 세션 — 누구나 읽기 (PIN 검색), 교사만 생성/수정
+    match /sessions/{sessionId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update: if request.auth != null
+                    && resource.data.teacherId == request.auth.uid;
+    }
+
+    // 결과 — 누구나 생성 (학생), 교사만 읽기/수정/삭제
+    match /results/{resultId} {
+      allow create: if true;
+      allow read, update, delete: if request.auth != null
+                                  && resource.data.teacherId == request.auth.uid;
+    }
+
+    // 기존 경로 (마이그레이션 기간 동안 유지)
     match /artifacts/{appId}/public/data/{collection}/{document=**} {
       allow read: if true;
       allow write: if request.auth != null;
     }
+
+    // 그 외 모두 차단
     match /{document=**} {
       allow read, write: if false;
     }

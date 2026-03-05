@@ -19,14 +19,13 @@
     <!-- Lucide Icons Core -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Paperlogy Font + Design System -->
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/Paperlogy@1.0.0/css/paperlogy.css" rel="stylesheet">
+    <link rel="stylesheet" href="/shared/common.css">
+
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;700;900&display=swap');
-        body { font-family: 'Pretendard', sans-serif; }
         .animate-bounce-slow { animation: bounce 1s infinite; }
-        @keyframes bounce { 0%, 100% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0.8,0,1,1); } 50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); } }
         .mole-hole { background: rgba(69, 26, 3, 0.4); box-shadow: inset 0 4px 8px rgba(0,0,0,0.5); }
-        .custom-scroll::-webkit-scrollbar { width: 4px; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         .grid-input:focus { background-color: rgba(255, 255, 255, 0.2); }
     </style>
 
@@ -353,6 +352,8 @@
                     correctCount: a.filter(x=>x.isCorrect).length,
                     totalCount: selectedSet.problems.length,
                     detailedAnswers: a,
+                    gameType: 'mole',
+                    sessionId: '',
                     timestamp: Date.now(),
                     submittedAt: formatDateTime()
                 };
