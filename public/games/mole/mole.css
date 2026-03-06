@@ -1,5 +1,4 @@
 /* ─── 두더지 잡기 전용 스타일 ─── */
-/* Phase 3에서 index.html 분리 시 구현 */
 
 .mole-hole {
     background: rgba(69, 26, 3, 0.4);
@@ -19,4 +18,35 @@
         transform: none;
         animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
     }
+}
+
+/* bounce-slow: 정답/오답 피드백 오버레이 */
+.animate-bounce-slow {
+    animation: bounce-slow 1s infinite;
+}
+
+@keyframes bounce-slow {
+    0%, 100% {
+        transform: scale(1);
+        animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+    50% {
+        transform: scale(1.05);
+        animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+}
+
+/* 게임 영역 하단 잔디밭 */
+.mole-ground {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 25%;
+    background: #22c55e;
+    border-top-left-radius: 100%;
+    border-top-right-radius: 100%;
+    transform: scaleX(1.25);
+    border-top: 8px solid rgba(34, 197, 94, 0.3);
+    z-index: -1;
 }

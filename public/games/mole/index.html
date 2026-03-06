@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+    <title>두더지 잡기 — EduMole Pro</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM & Babel -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Firebase Compat SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Fonts -->
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/Paperlogy@1.0.0/css/paperlogy.css" rel="stylesheet">
+
+    <!-- Design System + Game CSS -->
+    <link rel="stylesheet" href="/shared/common.css">
+    <link rel="stylesheet" href="mole.css">
+
+    <!-- Firebase Config -->
+    <script src="/firebase-config.js"></script>
+
+    <!-- Shared Modules (auth 불필요 — sessions/results는 공개 읽기/쓰기) -->
+    <script src="/shared/firebase-init.js"></script>
+    <script src="/shared/constants.js"></script>
+    <script src="/shared/quiz-bridge.js"></script>
+    <script src="/shared/ui-kit.js"></script>
+</head>
+<body class="bg-slate-50 antialiased overflow-x-hidden">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
+
+        // --- Lucide Icon Wrapper ---
+        const Icon = ({ name, size = 20, color = "currentColor", className = "" }) => {
+            const iconRef = useRef(null);
+            useEffect(() => {
+                if (iconRef.current && window.lucide) {
+                    const kebabName = name.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+                    iconRef.current.innerHTML = `<i data-lucide="${kebabName}"></i>`;
+                    window.lucide.createIcons({
+                        attrs: {
+                            width: size,
+                            height: size,
+                            stroke: color,
+                            class: className,
+                            'stroke-width': 2.5
+                        }
+                    });
+                }
+            }, [name, size, color, className]);
+            return <span ref={iconRef} className="inline-flex items-center justify-center leading-none" />;
+        };
+
+        // --- Constants ---
+        const EDUMOLE = window.EDUMOLE;
+        const DEFAULTS = EDUMOLE.GAME_DEFAULTS.mole;
+
+        // --- Loading View ---
+        function LoadingView() {
+            return (
+                <div className="min-h-screen bg-sky-400 flex items-center justify-center">
+                    <div className="bg-white/95 p-12 rounded-[3rem] shadow-2xl text-center">
+                        <div className="spinner mx-auto mb-6" style={{borderTopColor: '#38bdf8'}}></div>
+                        <p className="text-slate-600 font-bold text-lg">게임을 불러오는 중...</p>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Error View ---
+        function ErrorView({ message }) {
+            return (
+                <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
+                    <div className="bg-white p-12 rounded-[3rem] shadow-2xl max-w-sm w-full text-center">
+                        <div className="bg-red-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 text-red-500">
+                            <Icon name="AlertTriangle" size={40} />
+                        </div>
+                        <h2 className="text-2xl font-black text-slate-800 mb-3 tracking-tight">입장 불가</h2>
+                        <p className="text-slate-500 mb-8 font-medium leading-relaxed">{message}</p>
+                        <a href="/hub" className="inline-block w-full bg-slate-800 text-white font-bold py-4 rounded-2xl shadow-lg hover:bg-slate-900 transition text-center">
+                            허브로 돌아가기
+                        </a>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Result View ---
+        function ResultView({ result, studentName }) {
+            return (
+                <div className="min-h-screen bg-indigo-50 flex items-center justify-center p-6 text-center">
+                    <div className="bg-white p-12 rounded-[3.5rem] shadow-2xl max-sm:w-full max-w-sm border-b-8 border-indigo-200">
+                        <div className="bg-amber-100 w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6 text-amber-500 animate-bounce-slow">
+                            <Icon name="Trophy" size={40} />
+                        </div>
+                        <h2 className="text-3xl font-black mb-4 tracking-tighter italic text-indigo-600">{studentName} 학생, 클리어!</h2>
+                        <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 mb-4">
+                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">FINAL SCORE</div>
+                            <div className="text-6xl font-black text-slate-800 tracking-tighter">{result.score}점</div>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 mb-8 flex justify-around">
+                            <div className="text-center">
+                                <div className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1">정답</div>
+                                <div className="text-2xl font-black text-slate-800">{result.correctCount}</div>
+                            </div>
+                            <div className="w-px bg-slate-200"></div>
+                            <div className="text-center">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">전체</div>
+                                <div className="text-2xl font-black text-slate-800">{result.totalCount}</div>
+                            </div>
+                        </div>
+                        <a href="/hub" className="block w-full bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-indigo-700 transition transform active:scale-95 text-xl text-center">
+                            허브로 돌아가기
+                        </a>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- Game Engine (from mole-legacy.html) ---
+        function WhackAMoleGame({ session, studentName, onFinish }) {
+            const problems = session.problems || [];
+            const moleCount = (session.settings && session.settings.moleCount) || DEFAULTS.moleCount;
+            const timeLimit = (session.settings && session.settings.timeLimit) || DEFAULTS.timeLimit;
+
+            const [timeLeft, setTimeLeft] = useState(timeLimit);
+            const [score, setScore] = useState(0);
+            const [currentProbIdx, setCurrentProbIdx] = useState(0);
+            const [moles, setMoles] = useState(Array(6).fill({ active: false, content: '', isCorrect: false }));
+            const [ansLog, setAnsLog] = useState([]);
+            const [fb, setFb] = useState(null);
+            const active = useRef(true);
+
+            const finish = useCallback(async (s, a) => {
+                if (!active.current) return;
+                active.current = false;
+                onFinish({
+                    score: s,
+                    correctCount: a.filter(x => x.isCorrect).length,
+                    totalCount: problems.length,
+                    detailedAnswers: a
+                });
+            }, [problems.length, onFinish]);
+
+            useEffect(() => {
+                if (timeLeft <= 0) { finish(score, ansLog); return; }
+                const t = setInterval(() => setTimeLeft(p => p - 1), 1000);
+                return () => clearInterval(t);
+            }, [timeLeft, finish, score, ansLog]);
+
+            useEffect(() => {
+                if (!active.current || problems.length === 0) return;
+                const spawnTimer = setInterval(() => {
+                    setMoles(prev => {
+                        const emptyHoles = prev.map((m, i) => i < moleCount && !m.active ? i : -1).filter(i => i !== -1);
+                        if (emptyHoles.length === 0) return prev;
+                        const randomHoleIdx = emptyHoles[Math.floor(Math.random() * emptyHoles.length)];
+                        const p = problems[currentProbIdx];
+                        if (!p) return prev;
+                        const isCorrect = Math.random() < 0.35;
+                        const content = isCorrect ? p.answer : (p.distractors[Math.floor(Math.random() * 3)] || '함정!');
+                        const next = [...prev];
+                        next[randomHoleIdx] = { active: true, content, isCorrect };
+                        setTimeout(() => {
+                            setMoles(currentMoles => {
+                                const updated = [...currentMoles];
+                                if (updated[randomHoleIdx]) updated[randomHoleIdx] = { ...updated[randomHoleIdx], active: false };
+                                return updated;
+                            });
+                        }, 1800 + Math.random() * 1000);
+                        return next;
+                    });
+                }, 1200);
+                return () => clearInterval(spawnTimer);
+            }, [currentProbIdx, problems, moleCount]);
+
+            const whack = (idx) => {
+                const mole = moles[idx];
+                if (!mole.active) return;
+                setMoles(prev => { const next = [...prev]; next[idx] = { ...next[idx], active: false }; return next; });
+                setFb(mole.isCorrect);
+                setTimeout(() => setFb(null), 800);
+                const newAns = { questionIndex: currentProbIdx, isCorrect: mole.isCorrect };
+                const nextAnsLog = [...ansLog, newAns];
+                if (mole.isCorrect) {
+                    const nextScore = score + Math.ceil(100 / problems.length);
+                    if (currentProbIdx < problems.length - 1) {
+                        setScore(nextScore);
+                        setAnsLog(nextAnsLog);
+                        setCurrentProbIdx(v => v + 1);
+                    } else {
+                        finish(nextScore, nextAnsLog);
+                    }
+                } else {
+                    setScore(s => Math.max(0, s - 5));
+                    setAnsLog(nextAnsLog);
+                }
+            };
+
+            if (problems.length === 0) {
+                return <ErrorView message="이 세션에 등록된 문제가 없습니다." />;
+            }
+
+            return (
+                <div className="min-h-screen bg-sky-400 overflow-hidden relative select-none">
+                    {fb !== null && (
+                        <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                            <div className={`px-14 py-8 rounded-[3.5rem] text-6xl font-black shadow-2xl ${fb ? 'bg-emerald-500' : 'bg-red-500'} text-white border-4 border-white animate-bounce-slow`}>
+                                {fb ? '정답!' : '틀렸어!'}
+                            </div>
+                        </div>
+                    )}
+                    <div className="p-4 md:p-8 flex justify-between items-start">
+                        <div className="bg-white/95 p-5 rounded-[2rem] shadow-2xl flex gap-8">
+                            <div className="text-center text-slate-800">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">SCORE</div>
+                                <div className="text-3xl font-black text-emerald-600 italic">{score}</div>
+                            </div>
+                            <div className="w-[1px] bg-slate-200"></div>
+                            <div className="text-center text-slate-800">
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">TIME</div>
+                                <div className={`text-3xl font-black ${timeLeft < 10 ? 'text-red-500' : ''}`}>{timeLeft}s</div>
+                            </div>
+                        </div>
+                        <div className="bg-white p-5 rounded-[2rem] shadow-2xl font-black text-orange-500 text-2xl italic tracking-tight">
+                            Q {currentProbIdx + 1}/{problems.length}
+                        </div>
+                    </div>
+                    <div className="max-w-xl mx-auto mt-4 px-6 relative z-10 text-center">
+                        <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border-b-8 border-slate-200 relative overflow-hidden text-slate-800">
+                            <h2 className="text-2xl md:text-3xl font-black break-keep leading-tight">{problems[currentProbIdx].question}</h2>
+                        </div>
+                    </div>
+                    <div className={`max-w-3xl mx-auto mt-24 grid gap-y-24 gap-x-8 px-6 ${moleCount <= 3 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                        {Array.from({ length: moleCount }).map((_, i) => (
+                            <div key={i} className="relative aspect-square">
+                                <div className="absolute inset-0 mole-hole rounded-[50%] scale-y-50 mt-12 border-b-4 border-amber-950/20"></div>
+                                <div onClick={() => whack(i)} className={`absolute inset-0 transition-all duration-300 transform cursor-pointer ${moles[i].active ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-full opacity-0 scale-90 pointer-events-none'}`}>
+                                    <div className="w-full h-full bg-orange-800 rounded-t-[50%] border-4 border-orange-950 relative overflow-hidden flex flex-col items-center pt-6 shadow-xl">
+                                        <div className="flex gap-4 mb-1">
+                                            <div className="w-3.5 h-3.5 bg-slate-900 rounded-full flex items-center justify-center relative"><div className="w-1 h-1 bg-white rounded-full absolute top-1 left-1"></div></div>
+                                            <div className="w-3.5 h-3.5 bg-slate-900 rounded-full flex items-center justify-center relative"><div className="w-1 h-1 bg-white rounded-full absolute top-1 left-1"></div></div>
+                                        </div>
+                                        <div className="w-4 h-2.5 bg-pink-400 rounded-full mb-4 shadow-sm border border-pink-500/20"></div>
+                                        <div className="bg-white p-5 rounded-3xl border-2 border-slate-200 text-[40px] font-black w-11/12 text-center break-words shadow-lg leading-tight text-slate-700 min-h-[80px] flex items-center justify-center tracking-tighter">
+                                            {moles[i].content}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="mole-ground"></div>
+                </div>
+            );
+        }
+
+        // --- Main App ---
+        function MoleGameApp() {
+            const [state, setState] = useState('loading'); // loading | error | playing | result
+            const [session, setSession] = useState(null);
+            const [studentName, setStudentName] = useState('');
+            const [errorMsg, setErrorMsg] = useState('');
+            const [result, setResult] = useState(null);
+
+            useEffect(() => {
+                async function init() {
+                    // 1. URL 파라미터 파싱
+                    const params = EDUMOLE.getUrlParams();
+                    const sessionId = params.session;
+                    const student = params.student;
+
+                    if (!sessionId || !student) {
+                        setErrorMsg('잘못된 접근입니다.\n세션 ID와 학생 이름이 필요합니다.');
+                        setState('error');
+                        return;
+                    }
+
+                    setStudentName(decodeURIComponent(student));
+
+                    try {
+                        // 2. 세션 로드
+                        const sess = await QuizBridge.getSessionById(sessionId);
+                        if (!sess) {
+                            setErrorMsg('세션을 찾을 수 없습니다.\nPIN을 다시 확인해주세요.');
+                            setState('error');
+                            return;
+                        }
+
+                        // 3. 세션 상태 확인
+                        if (sess.status === EDUMOLE.SESSION_STATUS.ENDED) {
+                            setErrorMsg('이미 종료된 세션입니다.\n선생님께 새 세션을 요청하세요.');
+                            setState('error');
+                            return;
+                        }
+
+                        // 4. 문제 확인
+                        if (!sess.problems || sess.problems.length === 0) {
+                            setErrorMsg('이 세션에 등록된 문제가 없습니다.');
+                            setState('error');
+                            return;
+                        }
+
+                        setSession(sess);
+                        setState('playing');
+                    } catch (err) {
+                        console.error('세션 로드 실패:', err);
+                        setErrorMsg('세션을 불러오는 중 오류가 발생했습니다.\n잠시 후 다시 시도해주세요.');
+                        setState('error');
+                    }
+                }
+
+                init();
+            }, []);
+
+            const handleFinish = useCallback(async (gameResult) => {
+                const finalResult = {
+                    score: gameResult.score,
+                    correctCount: gameResult.correctCount,
+                    totalCount: gameResult.totalCount,
+                    detailedAnswers: gameResult.detailedAnswers
+                };
+                setResult(finalResult);
+                setState('result');
+
+                // QuizBridge로 결과 저장
+                try {
+                    await QuizBridge.saveResult({
+                        teacherId: session.teacherId,
+                        sessionId: session.id,
+                        classId: session.classId || '',
+                        className: session.className || '',
+                        setId: session.quizSetId || '',
+                        quizSetTitle: session.quizSetTitle || '',
+                        studentName: studentName,
+                        gameType: 'mole',
+                        score: gameResult.score,
+                        correctCount: gameResult.correctCount,
+                        totalCount: gameResult.totalCount,
+                        detailedAnswers: gameResult.detailedAnswers
+                    });
+                } catch (err) {
+                    console.error('결과 저장 실패:', err);
+                }
+            }, [session, studentName]);
+
+            if (state === 'loading') return <LoadingView />;
+            if (state === 'error') return <ErrorView message={errorMsg} />;
+            if (state === 'result') return <ResultView result={result} studentName={studentName} />;
+            if (state === 'playing' && session) {
+                return <WhackAMoleGame session={session} studentName={studentName} onFinish={handleFinish} />;
+            }
+            return null;
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MoleGameApp />);
+    </script>
+</body>
+</html>

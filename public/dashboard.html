@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no">
+    <title>교사 대시보드 — EduMole Pro</title>
+
+    <!-- Firebase Compat SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Fonts -->
+    <link href="https://cdn.jsdelivr.net/gh/orioncactus/Paperlogy@1.0.0/css/paperlogy.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/gh/fonts-archive/GmarketSans/GmarketSans.css" rel="stylesheet">
+
+    <!-- Design System -->
+    <link rel="stylesheet" href="/shared/common.css">
+
+    <!-- Firebase Config -->
+    <script src="/firebase-config.js"></script>
+
+    <!-- Shared Modules -->
+    <script src="/shared/firebase-init.js"></script>
+    <script src="/shared/constants.js"></script>
+    <script src="/shared/auth.js"></script>
+    <script src="/shared/quiz-bridge.js"></script>
+    <script src="/shared/ui-kit.js"></script>
+
+    <style>
+        /* === Dashboard Layout === */
+        .dash-wrap {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: var(--space-xl);
+            min-height: 100dvh;
+        }
+
+        .view { display: none; }
+        .view.active { display: block; }
+
+        /* === Profile Bar === */
+        .profile-bar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-md);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-xl);
+        }
+        .profile-bar img {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-full);
+            object-fit: cover;
+            border: 2px solid var(--border-light);
+        }
+        .profile-bar .name {
+            font-weight: 700;
+            font-size: var(--font-size-base);
+            color: var(--text-primary);
+            flex: 1;
+        }
+        .profile-bar .actions {
+            display: flex;
+            gap: var(--space-sm);
+        }
+
+        /* === Tabs === */
+        .dash-tabs {
+            margin-bottom: var(--space-2xl);
+        }
+
+        /* === Content Cards === */
+        .dash-card {
+            background: var(--bg-white);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            padding: var(--space-2xl);
+            margin-bottom: var(--space-xl);
+        }
+        .dash-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-xl);
+        }
+        .dash-card-title {
+            font-family: var(--font-display);
+            font-size: var(--font-size-xl);
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        /* === Quiz List Item === */
+        .quiz-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-lg);
+            border: 1px solid #f1f5f9;
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-sm);
+            transition: all var(--transition-fast);
+            cursor: pointer;
+        }
+        .quiz-item:hover { background: #f8fafc; }
+        .quiz-item .quiz-info { flex: 1; }
+        .quiz-item .quiz-title {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+        }
+        .quiz-item .quiz-meta {
+            font-size: var(--font-size-xs);
+            color: var(--text-tertiary);
+        }
+        .quiz-item .quiz-actions {
+            display: flex;
+            gap: var(--space-xs);
+        }
+
+        /* === Table === */
+        .dash-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+        }
+        .dash-table th {
+            text-align: left;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-tertiary);
+            padding: var(--space-md) var(--space-lg);
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .dash-table td {
+            padding: var(--space-md) var(--space-lg);
+            border-bottom: 1px solid #f8fafc;
+            font-size: var(--font-size-sm);
+            color: var(--text-primary);
+        }
+        .dash-table tbody tr:hover { background: #fafbfc; }
+
+        /* === Class Item === */
+        .class-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-lg);
+            border: 1px solid #f1f5f9;
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-sm);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        .class-item:hover { background: #f0f4ff; border-color: var(--color-primary-light); }
+        .class-item .class-name { font-weight: 700; }
+        .class-item .class-meta { font-size: var(--font-size-xs); color: var(--text-tertiary); }
+
+        /* === Editor === */
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-2xl);
+        }
+        .problem-card {
+            background: #f8fafc;
+            border: 1px solid #f1f5f9;
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            margin-bottom: var(--space-md);
+            position: relative;
+        }
+        .problem-card .problem-num {
+            font-size: 11px;
+            font-weight: 800;
+            color: var(--color-primary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: var(--space-sm);
+        }
+        .problem-card .problem-q {
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: var(--space-sm);
+            word-break: keep-all;
+        }
+        .problem-card .answer-tag {
+            display: inline-block;
+            background: #ecfdf5;
+            color: #059669;
+            font-size: var(--font-size-xs);
+            font-weight: 700;
+            padding: 4px 12px;
+            border-radius: var(--radius-sm);
+            margin-right: var(--space-xs);
+        }
+        .problem-card .distractor-tag {
+            display: inline-block;
+            background: #fef2f2;
+            color: #dc2626;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            margin-right: var(--space-xs);
+            margin-top: 4px;
+        }
+        .problem-card .del-btn {
+            position: absolute;
+            top: var(--space-md);
+            right: var(--space-md);
+            background: none;
+            border: none;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+        }
+        .problem-card:hover .del-btn { opacity: 1; }
+        .problem-card .del-btn:hover { color: var(--color-danger); }
+
+        /* === Filters === */
+        .filter-row {
+            display: flex;
+            gap: var(--space-md);
+            flex-wrap: wrap;
+            margin-bottom: var(--space-xl);
+        }
+        .filter-row select, .filter-row input {
+            padding: var(--space-sm) var(--space-md);
+            border: 1px solid #e5e7eb;
+            border-radius: var(--radius-sm);
+            font-family: var(--font-family);
+            font-size: var(--font-size-sm);
+            background: var(--bg-white);
+            color: var(--text-primary);
+            outline: none;
+        }
+        .filter-row select:focus, .filter-row input:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px rgba(124, 158, 245, 0.15);
+        }
+
+        /* === Spreadsheet Modal === */
+        .sheet-modal-bg {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            z-index: var(--z-modal-overlay);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-xl);
+        }
+        .sheet-modal-bg.show { display: flex; }
+        .sheet-modal {
+            background: var(--bg-white);
+            border-radius: var(--radius-xl);
+            padding: var(--space-2xl);
+            width: 100%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .sheet-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 4px;
+        }
+        .sheet-table th {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-tertiary);
+            padding: var(--space-sm);
+            text-align: center;
+        }
+        .sheet-table td input {
+            width: 100%;
+            padding: var(--space-sm);
+            border: 1px solid #e5e7eb;
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-xs);
+            outline: none;
+        }
+        .sheet-table td input:focus {
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px rgba(124, 158, 245, 0.12);
+        }
+
+        /* === Empty State === */
+        .empty-box {
+            text-align: center;
+            padding: var(--space-section) var(--space-xl);
+            color: var(--text-tertiary);
+            font-weight: 500;
+        }
+
+        /* === Roster View === */
+        .roster-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-xl);
+        }
+
+        /* Score badge */
+        .score-badge {
+            display: inline-block;
+            font-weight: 800;
+            font-size: var(--font-size-lg);
+            color: var(--color-primary-dark);
+        }
+
+        /* Icon button */
+        .icon-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: 1px solid #e5e7eb;
+            border-radius: var(--radius-sm);
+            background: var(--bg-white);
+            color: var(--text-tertiary);
+            cursor: pointer;
+            transition: all var(--transition-fast);
+        }
+        .icon-btn:hover { background: #f3f4f6; color: var(--text-primary); }
+    </style>
+</head>
+<body>
+    <div class="dash-wrap">
+        <!-- ===== 프로필 바 ===== -->
+        <div class="profile-bar glass-card" id="profile-bar" style="display:none;">
+            <img id="profile-photo" src="" alt="">
+            <div class="name" id="profile-name">교사</div>
+            <div class="actions">
+                <a href="/hub" class="icon-btn" title="허브로 돌아가기"><i data-lucide="home" style="width:18px;height:18px;"></i></a>
+                <button class="icon-btn" id="btn-logout" title="로그아웃"><i data-lucide="log-out" style="width:18px;height:18px;"></i></button>
+            </div>
+        </div>
+
+        <!-- ===== 탭 내비게이션 ===== -->
+        <div class="dash-tabs" id="dash-tabs" style="display:none;">
+            <div class="tab-group">
+                <div class="tab-item active" data-tab="quizzes">퀴즈 관리</div>
+                <div class="tab-item" data-tab="classes">학급 관리</div>
+                <div class="tab-item" data-tab="results">결과 조회</div>
+            </div>
+        </div>
+
+        <!-- ===== 탭 1: 퀴즈 관리 ===== -->
+        <div class="view active" id="view-quizzes">
+            <div class="dash-card">
+                <div class="dash-card-header">
+                    <div class="dash-card-title">퀴즈 세트</div>
+                    <button class="btn btn-primary btn-sm" id="btn-new-quiz">
+                        <i data-lucide="plus" style="width:16px;height:16px;"></i> 새 퀴즈
+                    </button>
+                </div>
+                <div id="quiz-list"></div>
+            </div>
+        </div>
+
+        <!-- ===== 탭 2: 학급 관리 ===== -->
+        <div class="view" id="view-classes">
+            <div class="dash-card">
+                <div class="dash-card-header">
+                    <div class="dash-card-title">학급 목록</div>
+                    <button class="btn btn-primary btn-sm" id="btn-new-class">
+                        <i data-lucide="plus" style="width:16px;height:16px;"></i> 학급 등록
+                    </button>
+                </div>
+                <div id="class-list"></div>
+            </div>
+
+            <!-- 명렬표 (학급 선택 시 표시) -->
+            <div class="dash-card" id="roster-section" style="display:none;">
+                <div class="roster-header">
+                    <div class="dash-card-title" id="roster-title">명렬표</div>
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn btn-sm btn-secondary" id="btn-batch-students">
+                            <i data-lucide="clipboard-paste" style="width:14px;height:14px;"></i> 일괄 등록
+                        </button>
+                        <button class="btn btn-sm btn-secondary" id="btn-add-student">
+                            <i data-lucide="user-plus" style="width:14px;height:14px;"></i> 추가
+                        </button>
+                    </div>
+                </div>
+                <table class="dash-table" id="roster-table">
+                    <thead><tr><th>번호</th><th>이름</th><th>입장코드</th><th style="text-align:right;">삭제</th></tr></thead>
+                    <tbody id="roster-body"></tbody>
+                </table>
+                <div id="roster-empty" class="empty-box" style="display:none;">등록된 학생이 없습니다.</div>
+            </div>
+        </div>
+
+        <!-- ===== 탭 3: 결과 조회 ===== -->
+        <div class="view" id="view-results">
+            <div class="dash-card">
+                <div class="dash-card-header">
+                    <div class="dash-card-title">게임 결과</div>
+                </div>
+                <div class="filter-row">
+                    <select id="filter-class"><option value="">전체 학급</option></select>
+                    <select id="filter-quiz"><option value="">전체 퀴즈</option></select>
+                    <input type="date" id="filter-date-from" placeholder="시작일">
+                    <input type="date" id="filter-date-to" placeholder="종료일">
+                    <button class="btn btn-sm btn-primary" id="btn-filter">조회</button>
+                </div>
+                <table class="dash-table" id="results-table">
+                    <thead><tr><th>학생</th><th>퀴즈</th><th>학급</th><th>점수</th><th>정답률</th><th>날짜</th></tr></thead>
+                    <tbody id="results-body"></tbody>
+                </table>
+                <div id="results-empty" class="empty-box" style="display:none;">조회된 결과가 없습니다.</div>
+            </div>
+
+            <!-- 문항 분석 -->
+            <div class="dash-card" id="analysis-section" style="display:none;">
+                <div class="dash-card-header">
+                    <div class="dash-card-title" id="analysis-title">문항 분석</div>
+                </div>
+                <div id="analysis-content"></div>
+            </div>
+        </div>
+
+        <!-- ===== 에디터 뷰 ===== -->
+        <div class="view" id="view-editor">
+            <div class="editor-header">
+                <button class="btn btn-secondary btn-sm" id="btn-editor-back">
+                    <i data-lucide="chevron-left" style="width:16px;height:16px;"></i> 돌아가기
+                </button>
+                <div class="dash-card-title" style="font-style:italic;">Quiz Creator</div>
+                <button class="btn btn-primary btn-sm" id="btn-editor-save">
+                    <i data-lucide="save" style="width:16px;height:16px;"></i> 저장
+                </button>
+            </div>
+
+            <div class="dash-card">
+                <div style="display:flex;flex-direction:column;gap:var(--space-lg);">
+                    <div>
+                        <label class="text-caption" style="display:block;margin-bottom:4px;">퀴즈 제목</label>
+                        <input class="input" id="editor-title" placeholder="제목을 입력하세요">
+                    </div>
+                    <div style="display:flex;gap:var(--space-lg);">
+                        <div style="flex:1;">
+                            <label class="text-caption" style="display:block;margin-bottom:4px;">두더지 수</label>
+                            <input type="range" id="editor-mole-count" min="2" max="6" value="6" style="width:100%;">
+                            <div style="text-align:center;font-weight:700;color:var(--color-primary-dark);" id="editor-mole-label">6</div>
+                        </div>
+                        <div style="flex:1;">
+                            <label class="text-caption" style="display:block;margin-bottom:4px;">제한 시간 (초)</label>
+                            <input type="range" id="editor-time-limit" min="10" max="120" step="10" value="30" style="width:100%;">
+                            <div style="text-align:center;font-weight:700;color:var(--color-secondary-dark);" id="editor-time-label">30초</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-lg);">
+                <div class="text-caption" style="font-weight:700;text-transform:uppercase;letter-spacing:0.05em;" id="editor-problem-count">문항 0개</div>
+                <div style="display:flex;gap:var(--space-sm);">
+                    <button class="btn btn-sm btn-secondary" id="btn-sheet-import">
+                        <i data-lucide="grid-3x3" style="width:14px;height:14px;"></i> 시트 가져오기
+                    </button>
+                    <button class="btn btn-sm btn-secondary" id="btn-add-problem">
+                        <i data-lucide="plus" style="width:14px;height:14px;"></i> 문항 추가
+                    </button>
+                </div>
+            </div>
+
+            <div id="editor-problems"></div>
+            <div id="editor-empty" class="empty-box">아직 등록된 문항이 없습니다.<br>상단의 시트 가져오기를 이용해 보세요!</div>
+        </div>
+    </div>
+
+    <!-- ===== 모달: 학급 등록 ===== -->
+    <div class="sheet-modal-bg" id="modal-class">
+        <div class="sheet-modal" style="max-width:400px;">
+            <h3 style="font-weight:800;font-size:var(--font-size-xl);margin-bottom:var(--space-xl);text-align:center;">학급 신규 등록</h3>
+            <div style="display:flex;flex-direction:column;gap:var(--space-md);margin-bottom:var(--space-xl);">
+                <input class="input" id="cls-name" placeholder="학급 명 (예: 6학년 2반)">
+                <div style="display:flex;gap:var(--space-md);">
+                    <input class="input" id="cls-grade" type="number" placeholder="학년" min="1" max="6">
+                    <input class="input" id="cls-num" type="number" placeholder="반" min="1">
+                </div>
+            </div>
+            <div style="display:flex;gap:var(--space-md);">
+                <button class="btn btn-primary" style="flex:1;" id="btn-cls-create">생성</button>
+                <button class="btn btn-secondary" style="flex:1;" id="btn-cls-cancel">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 모달: 학생 일괄 등록 ===== -->
+    <div class="sheet-modal-bg" id="modal-batch">
+        <div class="sheet-modal" style="max-width:480px;">
+            <h3 style="font-weight:800;font-size:var(--font-size-xl);margin-bottom:var(--space-md);">학생 일괄 등록</h3>
+            <p class="text-caption" style="margin-bottom:var(--space-lg);">번호, 이름 형식으로 한 줄에 한 명씩 입력하세요.</p>
+            <textarea class="input" id="batch-text" rows="10" placeholder="1, 홍길동&#10;2, 김철수" style="font-family:monospace;font-size:13px;resize:vertical;"></textarea>
+            <div style="display:flex;gap:var(--space-md);margin-top:var(--space-xl);">
+                <button class="btn btn-primary" style="flex:1;" id="btn-batch-go">등록</button>
+                <button class="btn btn-secondary" style="flex:1;" id="btn-batch-cancel">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 모달: 학생 개별 추가 ===== -->
+    <div class="sheet-modal-bg" id="modal-add-student">
+        <div class="sheet-modal" style="max-width:380px;">
+            <h3 style="font-weight:800;font-size:var(--font-size-xl);margin-bottom:var(--space-xl);text-align:center;">학생 추가</h3>
+            <div style="display:flex;flex-direction:column;gap:var(--space-md);margin-bottom:var(--space-xl);">
+                <input class="input" id="stu-number" type="number" placeholder="번호" min="1">
+                <input class="input" id="stu-name" placeholder="이름">
+            </div>
+            <div style="display:flex;gap:var(--space-md);">
+                <button class="btn btn-primary" style="flex:1;" id="btn-stu-create">추가</button>
+                <button class="btn btn-secondary" style="flex:1;" id="btn-stu-cancel">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== 모달: 스프레드시트 일괄 등록 ===== -->
+    <div class="sheet-modal-bg" id="modal-sheet">
+        <div class="sheet-modal">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-xl);">
+                <div>
+                    <h3 style="font-weight:800;font-size:var(--font-size-xl);">스프레드시트 일괄 등록</h3>
+                    <p class="text-caption" style="margin-top:4px;">질문, 정답, 오답1, 오답2, 오답3 범위를 복사 후 첫 칸에 붙여넣기</p>
+                </div>
+                <button class="btn btn-primary btn-sm" id="btn-sheet-apply">문항 추가</button>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="sheet-table" id="sheet-grid">
+                    <thead>
+                        <tr><th style="width:32px;">NO</th><th>질문</th><th style="color:#059669;">정답</th><th style="color:#dc2626;">오답1</th><th style="color:#dc2626;">오답2</th><th style="color:#dc2626;">오답3</th><th style="width:32px;"></th></tr>
+                    </thead>
+                    <tbody id="sheet-body"></tbody>
+                </table>
+            </div>
+            <div style="display:flex;gap:var(--space-md);margin-top:var(--space-lg);">
+                <button class="btn btn-secondary btn-sm" id="btn-sheet-add-row" style="flex:1;">
+                    <i data-lucide="plus" style="width:14px;height:14px;"></i> 행 추가
+                </button>
+                <button class="btn btn-secondary btn-sm" id="btn-sheet-close">닫기</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var EDUMOLE = window.EDUMOLE;
+        var currentTab = 'quizzes';
+        var editingQuiz = null; // { id, title, problems, moleCount, timeLimit } or null for new
+        var selectedClassForRoster = null;
+
+        // Spreadsheet grid data
+        var gridData = [['', '', '', '', '']];
+
+        // ─── 인증 가드 (onAuthReady: 인증 상태가 완전히 복원된 후 판단) ───
+
+        EduAuth.onAuthReady.then(function (user) {
+            if (!user || user.isAnonymous) {
+                window.location.replace('/hub');
+                return;
+            }
+            initDashboard(user);
+        });
+
+        async function initDashboard(user) {
+            // 프로필 바
+            var photo = document.getElementById('profile-photo');
+            var name = document.getElementById('profile-name');
+            photo.src = user.photoURL || '';
+            photo.style.display = user.photoURL ? 'block' : 'none';
+            name.textContent = user.displayName || user.email || '교사';
+
+            document.getElementById('profile-bar').style.display = 'flex';
+            document.getElementById('dash-tabs').style.display = 'block';
+
+            // 탭 이벤트
+            document.querySelectorAll('.tab-item').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    switchTab(tab.dataset.tab);
+                });
+            });
+
+            // 버튼 이벤트
+            document.getElementById('btn-logout').addEventListener('click', function () {
+                EduAuth.signOut().then(function () { window.location.href = '/hub'; });
+            });
+            document.getElementById('btn-new-quiz').addEventListener('click', function () { openEditor(null); });
+            document.getElementById('btn-new-class').addEventListener('click', function () { showModal('modal-class'); });
+            document.getElementById('btn-editor-back').addEventListener('click', function () { switchToView('view-quizzes'); });
+            document.getElementById('btn-editor-save').addEventListener('click', saveQuiz);
+            document.getElementById('btn-sheet-import').addEventListener('click', openSheetModal);
+            document.getElementById('btn-add-problem').addEventListener('click', addEmptyProblem);
+            document.getElementById('btn-filter').addEventListener('click', loadResults);
+
+            // 에디터 레인지 슬라이더
+            document.getElementById('editor-mole-count').addEventListener('input', function () {
+                document.getElementById('editor-mole-label').textContent = this.value;
+            });
+            document.getElementById('editor-time-limit').addEventListener('input', function () {
+                document.getElementById('editor-time-label').textContent = this.value + '초';
+            });
+
+            // 학급 모달
+            document.getElementById('btn-cls-create').addEventListener('click', createClass);
+            document.getElementById('btn-cls-cancel').addEventListener('click', function () { hideModal('modal-class'); });
+
+            // 학생 일괄 등록 모달
+            document.getElementById('btn-batch-students').addEventListener('click', function () { showModal('modal-batch'); });
+            document.getElementById('btn-batch-go').addEventListener('click', batchAddStudents);
+            document.getElementById('btn-batch-cancel').addEventListener('click', function () { hideModal('modal-batch'); });
+
+            // 학생 개별 추가 모달
+            document.getElementById('btn-add-student').addEventListener('click', function () { showModal('modal-add-student'); });
+            document.getElementById('btn-stu-create').addEventListener('click', addSingleStudent);
+            document.getElementById('btn-stu-cancel').addEventListener('click', function () { hideModal('modal-add-student'); });
+
+            // 시트 모달
+            document.getElementById('btn-sheet-apply').addEventListener('click', applySheetData);
+            document.getElementById('btn-sheet-add-row').addEventListener('click', function () {
+                gridData.push(['', '', '', '', '']);
+                renderSheetGrid();
+            });
+            document.getElementById('btn-sheet-close').addEventListener('click', function () { hideModal('modal-sheet'); });
+
+            // Lucide 아이콘 초기화
+            lucide.createIcons();
+
+            // 초기 데이터 로드
+            loadQuizzes();
+            loadClasses();
+        }
+
+        // ─── 탭 전환 ───
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-item').forEach(function (t) {
+                t.classList.toggle('active', t.dataset.tab === tab);
+            });
+            document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+            document.getElementById('view-' + tab).classList.add('active');
+
+            if (tab === 'quizzes') loadQuizzes();
+            else if (tab === 'classes') loadClasses();
+            else if (tab === 'results') { populateFilterDropdowns(); loadResults(); }
+        }
+
+        function switchToView(viewId) {
+            document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+            document.getElementById(viewId).classList.add('active');
+        }
+
+        // ─── 모달 ───
+
+        function showModal(id) { document.getElementById(id).classList.add('show'); }
+        function hideModal(id) { document.getElementById(id).classList.remove('show'); }
+
+        // ─── 퀴즈 관리 ───
+
+        async function loadQuizzes() {
+            try {
+                var quizzes = await QuizBridge.getQuizSets();
+                var list = document.getElementById('quiz-list');
+                if (quizzes.length === 0) {
+                    list.innerHTML = '<div class="empty-box">등록된 퀴즈가 없습니다.</div>';
+                    return;
+                }
+                quizzes.sort(function (a, b) {
+                    var at = a.updatedAt ? (a.updatedAt.seconds || 0) : 0;
+                    var bt = b.updatedAt ? (b.updatedAt.seconds || 0) : 0;
+                    return bt - at;
+                });
+                list.innerHTML = quizzes.map(function (q) {
+                    return '<div class="quiz-item" data-id="' + q.id + '">' +
+                        '<div class="quiz-info">' +
+                        '<div class="quiz-title">' + esc(q.title) + '</div>' +
+                        '<div class="quiz-meta">' + (q.problemCount || (q.problems ? q.problems.length : 0)) + '문항 / 두더지 ' + (q.moleCount || 6) + '마리 / ' + (q.timeLimit || 30) + '초</div>' +
+                        '</div>' +
+                        '<div class="quiz-actions">' +
+                        '<button class="icon-btn quiz-edit" title="편집"><i data-lucide="pencil" style="width:16px;height:16px;"></i></button>' +
+                        '<button class="icon-btn quiz-delete" title="삭제"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
+                        '</div>' +
+                        '</div>';
+                }).join('');
+                lucide.createIcons();
+
+                // 편집 이벤트
+                list.querySelectorAll('.quiz-edit').forEach(function (btn) {
+                    btn.addEventListener('click', function (e) {
+                        e.stopPropagation();
+                        var id = btn.closest('.quiz-item').dataset.id;
+                        var q = quizzes.find(function (x) { return x.id === id; });
+                        if (q) openEditor(q);
+                    });
+                });
+
+                // 삭제 이벤트
+                list.querySelectorAll('.quiz-delete').forEach(function (btn) {
+                    btn.addEventListener('click', async function (e) {
+                        e.stopPropagation();
+                        if (!confirm('정말 삭제하시겠습니까?')) return;
+                        var id = btn.closest('.quiz-item').dataset.id;
+                        try {
+                            await QuizBridge.deleteQuizSet(id);
+                            UIKit.showToast('퀴즈가 삭제되었습니다.', { type: 'success' });
+                            loadQuizzes();
+                        } catch (err) {
+                            UIKit.showToast('삭제 실패: ' + err.message, { type: 'error' });
+                        }
+                    });
+                });
+            } catch (err) {
+                UIKit.showToast('퀴즈 로드 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        // ─── 에디터 ───
+
+        function openEditor(quiz) {
+            editingQuiz = quiz ? JSON.parse(JSON.stringify(quiz)) : { title: '', problems: [], moleCount: 6, timeLimit: 30 };
+            document.getElementById('editor-title').value = editingQuiz.title;
+            document.getElementById('editor-mole-count').value = editingQuiz.moleCount || 6;
+            document.getElementById('editor-mole-label').textContent = editingQuiz.moleCount || 6;
+            document.getElementById('editor-time-limit').value = editingQuiz.timeLimit || 30;
+            document.getElementById('editor-time-label').textContent = (editingQuiz.timeLimit || 30) + '초';
+            renderEditorProblems();
+            switchToView('view-editor');
+        }
+
+        function renderEditorProblems() {
+            var probs = editingQuiz.problems || [];
+            var container = document.getElementById('editor-problems');
+            var empty = document.getElementById('editor-empty');
+            document.getElementById('editor-problem-count').textContent = '문항 ' + probs.length + '개';
+
+            if (probs.length === 0) {
+                container.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+            container.innerHTML = probs.map(function (p, i) {
+                var dists = (p.distractors || []).map(function (d) {
+                    return '<span class="distractor-tag">' + esc(d) + '</span>';
+                }).join('');
+                return '<div class="problem-card" data-idx="' + i + '">' +
+                    '<button class="del-btn problem-del"><i data-lucide="trash-2" style="width:16px;height:16px;"></i></button>' +
+                    '<div class="problem-num">Problem ' + (i + 1) + '</div>' +
+                    '<div class="problem-q">' + esc(p.question) + '</div>' +
+                    '<div><span class="answer-tag">' + esc(p.answer) + '</span>' + dists + '</div>' +
+                    '</div>';
+            }).join('');
+            lucide.createIcons();
+
+            container.querySelectorAll('.problem-del').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var idx = parseInt(btn.closest('.problem-card').dataset.idx);
+                    editingQuiz.problems.splice(idx, 1);
+                    renderEditorProblems();
+                });
+            });
+        }
+
+        function addEmptyProblem() {
+            var q = prompt('질문을 입력하세요:');
+            if (!q) return;
+            var a = prompt('정답을 입력하세요:');
+            if (!a) return;
+            var d1 = prompt('오답 1:') || '오답1';
+            var d2 = prompt('오답 2:') || '오답2';
+            var d3 = prompt('오답 3:') || '오답3';
+            editingQuiz.problems.push({ question: q, answer: a, distractors: [d1, d2, d3] });
+            renderEditorProblems();
+        }
+
+        async function saveQuiz() {
+            var title = document.getElementById('editor-title').value.trim();
+            if (!title) { UIKit.showToast('퀴즈 제목을 입력하세요.', { type: 'error' }); return; }
+
+            editingQuiz.title = title;
+            editingQuiz.moleCount = parseInt(document.getElementById('editor-mole-count').value);
+            editingQuiz.timeLimit = parseInt(document.getElementById('editor-time-limit').value);
+
+            try {
+                if (editingQuiz.id) {
+                    await QuizBridge.updateQuizSet(editingQuiz.id, {
+                        title: editingQuiz.title,
+                        problems: editingQuiz.problems,
+                        moleCount: editingQuiz.moleCount,
+                        timeLimit: editingQuiz.timeLimit
+                    });
+                } else {
+                    await QuizBridge.createQuizSet({
+                        title: editingQuiz.title,
+                        problems: editingQuiz.problems,
+                        timeLimit: editingQuiz.timeLimit
+                    });
+                }
+                UIKit.showToast('퀴즈가 저장되었습니다!', { type: 'success' });
+                switchTab('quizzes');
+            } catch (err) {
+                UIKit.showToast('저장 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        // ─── 스프레드시트 일괄 등록 ───
+
+        function openSheetModal() {
+            gridData = [['', '', '', '', '']];
+            renderSheetGrid();
+            showModal('modal-sheet');
+        }
+
+        function renderSheetGrid() {
+            var tbody = document.getElementById('sheet-body');
+            tbody.innerHTML = gridData.map(function (row, rIdx) {
+                var cells = [0, 1, 2, 3, 4].map(function (cIdx) {
+                    var style = cIdx === 1 ? 'border-color:#059669;' : '';
+                    return '<td><input value="' + esc(row[cIdx]) + '" data-r="' + rIdx + '" data-c="' + cIdx + '" style="' + style + '" ' +
+                        (rIdx === 0 && cIdx === 0 ? 'placeholder="붙여넣기..."' : '') + '></td>';
+                }).join('');
+                return '<tr><td style="text-align:center;font-size:11px;font-weight:700;color:var(--text-tertiary);">' + (rIdx + 1) + '</td>' + cells +
+                    '<td><button class="icon-btn sheet-row-del" data-r="' + rIdx + '" style="width:28px;height:28px;border:none;"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button></td></tr>';
+            }).join('');
+            lucide.createIcons();
+
+            // 입력 이벤트
+            tbody.querySelectorAll('input').forEach(function (inp) {
+                inp.addEventListener('input', function () {
+                    gridData[parseInt(inp.dataset.r)][parseInt(inp.dataset.c)] = inp.value;
+                });
+                // 붙여넣기 이벤트 (첫 셀만)
+                if (parseInt(inp.dataset.r) === 0 && parseInt(inp.dataset.c) === 0) {
+                    inp.addEventListener('paste', function (e) {
+                        e.preventDefault();
+                        var text = e.clipboardData.getData('text');
+                        var rows = text.split('\n').filter(function (r) { return r.trim(); }).map(function (r) { return r.split('\t'); });
+                        gridData = rows.map(function (row) {
+                            var rd = ['', '', '', '', ''];
+                            row.forEach(function (cell, ci) { if (ci < 5) rd[ci] = cell.trim(); });
+                            return rd;
+                        });
+                        if (gridData.length === 0) gridData = [['', '', '', '', '']];
+                        renderSheetGrid();
+                    });
+                }
+            });
+
+            // 행 삭제
+            tbody.querySelectorAll('.sheet-row-del').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var r = parseInt(btn.dataset.r);
+                    gridData.splice(r, 1);
+                    if (gridData.length === 0) gridData = [['', '', '', '', '']];
+                    renderSheetGrid();
+                });
+            });
+        }
+
+        function applySheetData() {
+            var valid = gridData.filter(function (row) { return row[0] && row[1]; }).map(function (row) {
+                return {
+                    question: row[0],
+                    answer: row[1],
+                    distractors: [row[2] || '오답1', row[3] || '오답2', row[4] || '오답3']
+                };
+            });
+            if (valid.length === 0) {
+                UIKit.showToast('유효한 문항이 없습니다.', { type: 'error' });
+                return;
+            }
+            editingQuiz.problems = (editingQuiz.problems || []).concat(valid);
+            renderEditorProblems();
+            hideModal('modal-sheet');
+            UIKit.showToast(valid.length + '개 문항이 추가되었습니다.', { type: 'success' });
+        }
+
+        // ─── 학급 관리 ───
+
+        var cachedClasses = [];
+        var cachedQuizSets = [];
+
+        async function loadClasses() {
+            try {
+                cachedClasses = await QuizBridge.getClasses();
+                var list = document.getElementById('class-list');
+                if (cachedClasses.length === 0) {
+                    list.innerHTML = '<div class="empty-box">등록된 학급이 없습니다.</div>';
+                    return;
+                }
+                list.innerHTML = cachedClasses.map(function (c) {
+                    return '<div class="class-item" data-id="' + c.id + '">' +
+                        '<div><div class="class-name">' + esc(c.name) + '</div>' +
+                        '<div class="class-meta">' + (c.grade || '') + '학년 ' + (c.classNum || '') + '반 / ' + (c.studentCount || 0) + '명</div></div>' +
+                        '<div style="display:flex;gap:4px;align-items:center;">' +
+                        '<button class="icon-btn class-delete" title="삭제"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button>' +
+                        '<i data-lucide="chevron-right" style="width:18px;height:18px;color:var(--text-tertiary);"></i>' +
+                        '</div></div>';
+                }).join('');
+                lucide.createIcons();
+
+                // 학급 클릭 → 명렬표
+                list.querySelectorAll('.class-item').forEach(function (item) {
+                    item.addEventListener('click', function (e) {
+                        if (e.target.closest('.class-delete')) return;
+                        var id = item.dataset.id;
+                        var cls = cachedClasses.find(function (c) { return c.id === id; });
+                        if (cls) openRoster(cls);
+                    });
+                });
+
+                // 삭제
+                list.querySelectorAll('.class-delete').forEach(function (btn) {
+                    btn.addEventListener('click', async function (e) {
+                        e.stopPropagation();
+                        if (!confirm('학급을 삭제하시겠습니까?')) return;
+                        var id = btn.closest('.class-item').dataset.id;
+                        try {
+                            await QuizBridge.deleteClass(id);
+                            UIKit.showToast('학급이 삭제되었습니다.', { type: 'success' });
+                            loadClasses();
+                            document.getElementById('roster-section').style.display = 'none';
+                        } catch (err) {
+                            UIKit.showToast('삭제 실패: ' + err.message, { type: 'error' });
+                        }
+                    });
+                });
+            } catch (err) {
+                UIKit.showToast('학급 로드 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        async function createClass() {
+            var name = document.getElementById('cls-name').value.trim();
+            var grade = document.getElementById('cls-grade').value;
+            var classNum = document.getElementById('cls-num').value;
+            if (!name || !grade || !classNum) {
+                UIKit.showToast('모든 항목을 입력해주세요.', { type: 'error' });
+                return;
+            }
+            try {
+                await QuizBridge.createClass({ name: name, grade: grade, classNum: classNum });
+                UIKit.showToast('학급이 등록되었습니다!', { type: 'success' });
+                hideModal('modal-class');
+                document.getElementById('cls-name').value = '';
+                document.getElementById('cls-grade').value = '';
+                document.getElementById('cls-num').value = '';
+                loadClasses();
+            } catch (err) {
+                UIKit.showToast('학급 등록 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        // ─── 명렬표 ───
+
+        async function openRoster(cls) {
+            selectedClassForRoster = cls;
+            document.getElementById('roster-section').style.display = 'block';
+            document.getElementById('roster-title').textContent = cls.name + ' 명렬표';
+            await loadRoster();
+        }
+
+        async function loadRoster() {
+            if (!selectedClassForRoster) return;
+            try {
+                var students = await QuizBridge.getStudents(selectedClassForRoster.id);
+                students.sort(function (a, b) {
+                    return String(a.number).localeCompare(String(b.number), undefined, { numeric: true });
+                });
+
+                var tbody = document.getElementById('roster-body');
+                var empty = document.getElementById('roster-empty');
+
+                if (students.length === 0) {
+                    tbody.innerHTML = '';
+                    empty.style.display = 'block';
+                    return;
+                }
+                empty.style.display = 'none';
+                tbody.innerHTML = students.map(function (s) {
+                    return '<tr>' +
+                        '<td style="font-family:monospace;color:var(--text-tertiary);">' + s.number + '번</td>' +
+                        '<td style="font-weight:700;">' + esc(s.name) + '</td>' +
+                        '<td><span style="background:#ecfdf5;color:#059669;padding:4px 12px;border-radius:8px;font-family:monospace;font-weight:700;font-size:13px;">' + esc(s.code) + '</span></td>' +
+                        '<td style="text-align:right;"><button class="icon-btn stu-del" data-id="' + s.id + '" title="삭제"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button></td>' +
+                        '</tr>';
+                }).join('');
+                lucide.createIcons();
+
+                tbody.querySelectorAll('.stu-del').forEach(function (btn) {
+                    btn.addEventListener('click', async function () {
+                        if (!confirm('학생을 삭제하시겠습니까?')) return;
+                        try {
+                            await QuizBridge.removeStudent(btn.dataset.id, selectedClassForRoster.id);
+                            UIKit.showToast('학생이 삭제되었습니다.', { type: 'success' });
+                            loadRoster();
+                            loadClasses();
+                        } catch (err) {
+                            UIKit.showToast('삭제 실패: ' + err.message, { type: 'error' });
+                        }
+                    });
+                });
+            } catch (err) {
+                UIKit.showToast('명렬표 로드 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        async function batchAddStudents() {
+            var text = document.getElementById('batch-text').value;
+            var lines = text.split('\n').filter(function (l) { return l.trim(); });
+            if (lines.length === 0) { UIKit.showToast('학생 명단을 입력해주세요.', { type: 'error' }); return; }
+
+            var cls = selectedClassForRoster;
+            var count = 0;
+            try {
+                for (var i = 0; i < lines.length; i++) {
+                    var parts = lines[i].split(/[,\t/]+/).map(function (p) { return p.trim(); });
+                    if (parts.length >= 2) {
+                        var num = parts[0];
+                        var name = parts[1];
+                        var paddedNum = String(num).padStart(2, '0');
+                        var code = EDUMOLE.generateStudentCode(
+                            new Date().getFullYear(),
+                            cls.grade || 0,
+                            cls.classNum || 0,
+                            parseInt(num),
+                            name
+                        );
+                        await QuizBridge.addStudent({ name: name, number: num, classId: cls.id, code: code });
+                        count++;
+                    }
+                }
+                UIKit.showToast(count + '명의 학생이 등록되었습니다!', { type: 'success' });
+                hideModal('modal-batch');
+                document.getElementById('batch-text').value = '';
+                loadRoster();
+                loadClasses();
+            } catch (err) {
+                UIKit.showToast('등록 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        async function addSingleStudent() {
+            var num = document.getElementById('stu-number').value;
+            var name = document.getElementById('stu-name').value.trim();
+            if (!num || !name) { UIKit.showToast('번호와 이름을 입력해주세요.', { type: 'error' }); return; }
+
+            var cls = selectedClassForRoster;
+            var code = EDUMOLE.generateStudentCode(
+                new Date().getFullYear(),
+                cls.grade || 0,
+                cls.classNum || 0,
+                parseInt(num),
+                name
+            );
+            try {
+                await QuizBridge.addStudent({ name: name, number: num, classId: cls.id, code: code });
+                UIKit.showToast(name + ' 학생이 추가되었습니다.', { type: 'success' });
+                hideModal('modal-add-student');
+                document.getElementById('stu-number').value = '';
+                document.getElementById('stu-name').value = '';
+                loadRoster();
+                loadClasses();
+            } catch (err) {
+                UIKit.showToast('추가 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        // ─── 결과 조회 ───
+
+        async function populateFilterDropdowns() {
+            // 학급 필터
+            if (cachedClasses.length === 0) {
+                try { cachedClasses = await QuizBridge.getClasses(); } catch (e) { /* ignore */ }
+            }
+            var filterClass = document.getElementById('filter-class');
+            filterClass.innerHTML = '<option value="">전체 학급</option>';
+            cachedClasses.forEach(function (c) {
+                filterClass.innerHTML += '<option value="' + c.id + '">' + esc(c.name) + '</option>';
+            });
+
+            // 퀴즈 필터
+            try { cachedQuizSets = await QuizBridge.getQuizSets(); } catch (e) { /* ignore */ }
+            var filterQuiz = document.getElementById('filter-quiz');
+            filterQuiz.innerHTML = '<option value="">전체 퀴즈</option>';
+            cachedQuizSets.forEach(function (q) {
+                filterQuiz.innerHTML += '<option value="' + q.id + '">' + esc(q.title) + '</option>';
+            });
+        }
+
+        async function loadResults() {
+            var filters = {};
+            var classId = document.getElementById('filter-class').value;
+            var setId = document.getElementById('filter-quiz').value;
+            var dateFrom = document.getElementById('filter-date-from').value;
+            var dateTo = document.getElementById('filter-date-to').value;
+            if (classId) filters.classId = classId;
+            if (setId) filters.setId = setId;
+            if (dateFrom) filters.dateFrom = dateFrom;
+            if (dateTo) filters.dateTo = dateTo;
+
+            try {
+                var results = await QuizBridge.getResults(filters);
+                var tbody = document.getElementById('results-body');
+                var empty = document.getElementById('results-empty');
+
+                if (results.length === 0) {
+                    tbody.innerHTML = '';
+                    empty.style.display = 'block';
+                    document.getElementById('analysis-section').style.display = 'none';
+                    return;
+                }
+                empty.style.display = 'none';
+                tbody.innerHTML = results.map(function (r) {
+                    var rate = r.totalCount > 0 ? Math.round(r.correctCount / r.totalCount * 100) : 0;
+                    return '<tr>' +
+                        '<td style="font-weight:700;">' + esc(r.studentName) + '</td>' +
+                        '<td>' + esc(r.quizSetTitle || '-') + '</td>' +
+                        '<td>' + esc(r.className || '-') + '</td>' +
+                        '<td><span class="score-badge">' + r.score + '</span></td>' +
+                        '<td>' + r.correctCount + '/' + r.totalCount + ' (' + rate + '%)</td>' +
+                        '<td style="color:var(--text-tertiary);font-size:13px;">' + (r.dateStr || '-') + '</td>' +
+                        '</tr>';
+                }).join('');
+
+                // 문항 분석 (퀴즈 필터가 선택된 경우)
+                if (setId) {
+                    showAnalysis(setId, results);
+                } else {
+                    document.getElementById('analysis-section').style.display = 'none';
+                }
+            } catch (err) {
+                UIKit.showToast('결과 조회 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        function showAnalysis(setId, results) {
+            var quiz = cachedQuizSets.find(function (q) { return q.id === setId; });
+            if (!quiz || !quiz.problems) {
+                document.getElementById('analysis-section').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('analysis-section').style.display = 'block';
+            document.getElementById('analysis-title').textContent = quiz.title + ' — 문항 분석';
+
+            var content = document.getElementById('analysis-content');
+            content.innerHTML = quiz.problems.map(function (p, i) {
+                var ans = results.flatMap(function (r) { return r.detailedAnswers || []; })
+                    .filter(function (da) { return da.questionIndex === i; });
+                var corrects = ans.filter(function (da) { return da.isCorrect; }).length;
+                var rate = ans.length > 0 ? Math.round(corrects / ans.length * 100) : 0;
+                var barColor = rate > 70 ? 'var(--color-success)' : 'var(--color-secondary)';
+                return '<div style="margin-bottom:var(--space-lg);">' +
+                    '<div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:var(--font-size-sm);">' +
+                    '<span style="font-weight:600;color:var(--text-primary);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Q' + (i + 1) + '. ' + esc(p.question) + '</span>' +
+                    '<span style="font-weight:700;color:' + barColor + ';">' + rate + '%</span></div>' +
+                    '<div style="width:100%;background:#f1f5f9;height:6px;border-radius:3px;overflow:hidden;">' +
+                    '<div style="height:100%;width:' + rate + '%;background:' + barColor + ';transition:width 0.8s;border-radius:3px;"></div></div></div>';
+            }).join('');
+        }
+
+        // ─── 유틸 ───
+
+        function esc(str) {
+            if (!str) return '';
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+    })();
+    </script>
+</body>
+</html>

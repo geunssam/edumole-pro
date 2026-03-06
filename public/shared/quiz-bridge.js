@@ -203,6 +203,18 @@
     }
 
     /**
+     * 세션 ID로 직접 조회 (학생용 - 인증 불필요)
+     * 게임 페이지에서 URL 파라미터의 sessionId로 세션을 로드할 때 사용
+     * @param {string} sessionId
+     * @returns {Promise<Object|null>}
+     */
+    async function getSessionById(sessionId) {
+        var doc = await EDUMOLE.getTopCollection(db, TOP.SESSIONS).doc(sessionId).get();
+        if (!doc.exists) return null;
+        return Object.assign({ id: doc.id }, doc.data());
+    }
+
+    /**
      * 세션 상태 업데이트
      * @param {string} sessionId
      * @param {string} status - SESSION_STATUS 값
@@ -492,6 +504,7 @@
         // 세션
         createSession: createSession,
         findSessionByPin: findSessionByPin,
+        getSessionById: getSessionById,
         updateSessionStatus: updateSessionStatus,
         endSession: endSession,
         getSessionHistory: getSessionHistory,

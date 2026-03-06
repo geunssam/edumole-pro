@@ -494,6 +494,9 @@
             <div class="profile-bar">
                 <img class="profile-photo" id="teacher-photo" src="" alt="">
                 <span class="profile-name" id="teacher-name"></span>
+                <a href="/dashboard" class="btn btn-sm btn-secondary" style="margin-left:auto;margin-right:8px;text-decoration:none;">
+                    <i data-lucide="layout-dashboard" style="width:14px;height:14px;"></i> 퀴즈/학급 관리
+                </a>
                 <button class="logout-btn" id="btn-logout">로그아웃</button>
             </div>
 
@@ -644,6 +647,9 @@
                 // URL에서 파라미터 제거 (히스토리 깔끔하게)
                 window.history.replaceState({}, '', location.pathname);
             }
+
+            // Google 리다이렉트 결과 처리 (hub가 리다이렉트 대상)
+            EduAuth.processRedirect();
 
             EduAuth.onAuthChanged(function (user) {
                 handleAuthChanged(user);
@@ -807,14 +813,20 @@
         // ─── Auth Changed ───
         async function handleAuthChanged(user) {
             if (user && !user.isAnonymous) {
-                // 교사 로그인 상태
+                // 뷰 전환은 반드시 실행 (데이터 로드 실패와 무관)
+                $('#teacher-name').textContent = user.displayName || '선생님';
+                $('#teacher-photo').src = user.photoURL || '';
+                showView('teacher');
+
+                // 데이터 로드는 별도로 (실패해도 뷰 유지)
                 try {
                     var profile = await EduAuth.getTeacherProfile();
-                    state.teacherProfile = profile;
-                    $('#teacher-photo').src = (profile && profile.photoURL) || '';
-                    $('#teacher-name').textContent = (profile && profile.displayName) || user.displayName || '선생님';
+                    if (profile) {
+                        state.teacherProfile = profile;
+                        $('#teacher-photo').src = profile.photoURL || '';
+                        $('#teacher-name').textContent = profile.displayName || user.displayName || '선생님';
+                    }
                     await loadTeacherData();
-                    showView('teacher');
                 } catch (err) {
                     console.error('교사 데이터 로드 실패:', err);
                     UIKit.showToast('데이터를 불러올 수 없습니다', { type: 'error' });

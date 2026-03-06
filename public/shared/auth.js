@@ -14,30 +14,55 @@
     var db = window.firebaseDB;
     var EDUMOLE = window.EDUMOLE;
 
-    // Google 프로바이더 (리다이렉트 로그인용)
+    // Google 프로바이더 (팝업 로그인용)
     var googleProvider = new firebase.auth.GoogleAuthProvider();
 
-    // ─── 리다이렉트 결과 수신 (페이지 로드 시 자동 실행) ───
-
-    auth.getRedirectResult()
-        .then(async function (result) {
-            if (result.user) {
-                await _upsertTeacherProfile(result.user);
-                console.log('EduAuth: Google 리다이렉트 로그인 성공 -', result.user.displayName);
-            }
-        })
-        .catch(function (error) {
-            console.error('EduAuth: 리다이렉트 결과 처리 실패', error);
-        });
+    // ─── 인증 상태 초기화 Promise ───
+    // onAuthStateChanged의 첫 콜백을 Promise로 래핑하여
+    // 다른 페이지에서 auth 상태가 완전히 복원된 후에 판단할 수 있게 함
+    var _authReadyResolve;
+    var authReady = new Promise(function (resolve) { _authReadyResolve = resolve; });
+    var _authReadyFired = false;
+    auth.onAuthStateChanged(function (user) {
+        if (!_authReadyFired) {
+            _authReadyFired = true;
+            _authReadyResolve(user);
+        }
+    });
 
     // ─── 교사 인증 (Google OAuth) ───
 
     /**
-     * Google 리다이렉트 로그인 — 페이지가 Google로 이동 후 돌아옴
-     * 결과는 위의 getRedirectResult()에서 수신
+     * Google 팝업 로그인 — 팝업에서 인증 완료 후 결과 직접 반환
+     * 크로스 오리진 iframe 이슈 없이 안정적으로 동작
+     * @returns {Promise<firebase.User>}
      */
-    function signInWithGoogle() {
-        auth.signInWithRedirect(googleProvider);
+    async function signInWithGoogle() {
+        var result = await auth.signInWithPopup(googleProvider);
+        if (result.user) {
+            await _upsertTeacherProfile(result.user);
+            console.log('EduAuth: Google 팝업 로그인 성공 -', result.user.displayName);
+        }
+        return result.user;
+    }
+
+    /**
+     * 리다이렉트 로그인 결과 처리
+     * hub.html 등 리다이렉트 대상 페이지에서만 호출
+     * @returns {Promise<firebase.User|null>}
+     */
+    async function processRedirect() {
+        try {
+            var result = await auth.getRedirectResult();
+            if (result.user) {
+                await _upsertTeacherProfile(result.user);
+                console.log('EduAuth: Google 리다이렉트 로그인 성공 -', result.user.displayName);
+            }
+            return result.user || null;
+        } catch (error) {
+            console.error('EduAuth: 리다이렉트 결과 처리 실패', error);
+            return null;
+        }
     }
 
     /**
@@ -149,6 +174,7 @@
     window.EduAuth = {
         // 교사
         signInWithGoogle: signInWithGoogle,
+        processRedirect: processRedirect,
         getTeacherProfile: getTeacherProfile,
         isTeacher: isTeacher,
         getTeacherUid: getTeacherUid,
@@ -157,6 +183,7 @@
         // 공통
         signOut: signOut,
         onAuthChanged: onAuthChanged,
+        onAuthReady: authReady,
         getCurrentUser: getCurrentUser
     };
 })();
