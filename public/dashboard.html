@@ -335,6 +335,149 @@
             transition: all var(--transition-fast);
         }
         .icon-btn:hover { background: #f3f4f6; color: var(--text-primary); }
+
+        /* === Stat Grid === */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-md);
+            margin-bottom: var(--space-xl);
+        }
+        .stat-card {
+            background: #f8fafc;
+            border: 1px solid #f1f5f9;
+            border-radius: var(--radius-md);
+            padding: var(--space-lg);
+            text-align: center;
+        }
+        .stat-card .stat-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-tertiary);
+            margin-bottom: var(--space-xs);
+        }
+        .stat-card .stat-value {
+            font-size: var(--font-size-2xl);
+            font-weight: 800;
+            color: var(--color-primary-dark);
+        }
+
+        /* === Sub Tabs === */
+        .sub-tab-group {
+            display: flex;
+            border-bottom: 1px solid #f1f5f9;
+            margin-bottom: var(--space-xl);
+            gap: var(--space-xl);
+        }
+        .sub-tab-item {
+            padding: var(--space-sm) 0;
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--text-tertiary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all var(--transition-fast);
+        }
+        .sub-tab-item.active {
+            color: var(--color-primary-dark);
+            border-bottom-color: var(--color-primary);
+        }
+        .sub-tab-item:hover { color: var(--text-primary); }
+
+        /* === Accordion === */
+        .accordion-row { cursor: pointer; }
+        .accordion-row:hover { background: #f8fafc; }
+        .accordion-detail { display: none; }
+        .accordion-detail.open { display: table-row; }
+        .accordion-detail td { padding: 0; }
+        .accordion-content {
+            padding: 12px 16px;
+            background: #fafbfc;
+            border-top: 1px dashed #e5e7eb;
+        }
+        .expand-icon {
+            transition: transform 150ms;
+            display: inline-block;
+            font-size: 11px;
+            color: var(--text-tertiary);
+        }
+        .expand-icon.rotated { transform: rotate(90deg); }
+
+        /* === Detail Header === */
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-xl);
+        }
+        .detail-title-section h2 {
+            font-family: var(--font-display);
+            font-size: var(--font-size-xl);
+            font-weight: 800;
+            color: var(--text-primary);
+            margin: 0 0 4px;
+        }
+        .detail-title-section .detail-meta {
+            font-size: var(--font-size-xs);
+            color: var(--text-tertiary);
+        }
+
+        /* === Clickable Student Row === */
+        .student-clickable td { cursor: pointer; }
+        .student-clickable:hover { background: #f0f4ff !important; }
+
+        /* === Play Count Badge === */
+        .play-badge {
+            display: inline-block;
+            background: #eff6ff;
+            color: #2563eb;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 2px 10px;
+            border-radius: 999px;
+        }
+
+        /* === Compact Answer Lines === */
+        .compact-answer {
+            padding: 3px 0;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+        .compact-answer .q-correct { color: #059669; }
+        .compact-answer .q-wrong { color: #dc2626; }
+        .compact-answer .q-timeout { color: #d97706; }
+
+        /* === Quiz History Card (Student Detail) === */
+        .history-card {
+            border: 1px solid #f1f5f9;
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-sm);
+            overflow: hidden;
+        }
+        .history-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-md) var(--space-lg);
+            cursor: pointer;
+            transition: background var(--transition-fast);
+        }
+        .history-card-header:hover { background: #f8fafc; }
+        .history-card-body {
+            display: none;
+            padding: var(--space-md) var(--space-lg);
+            background: #fafbfc;
+            border-top: 1px dashed #e5e7eb;
+        }
+        .history-card-body.open { display: block; }
+
+        /* === Load More === */
+        .load-more-wrap {
+            text-align: center;
+            padding: var(--space-lg) 0;
+        }
     </style>
 </head>
 <body>
@@ -371,6 +514,58 @@
             </div>
         </div>
 
+        <!-- ===== 퀴즈 상세 뷰 ===== -->
+        <div class="view" id="view-quiz-detail">
+            <div class="dash-card">
+                <div class="detail-header">
+                    <button class="btn btn-secondary btn-sm" id="btn-quiz-detail-back">
+                        <i data-lucide="chevron-left" style="width:16px;height:16px;"></i> 돌아가기
+                    </button>
+                    <div style="display:flex;gap:var(--space-sm);">
+                        <button class="btn btn-secondary btn-sm" id="btn-quiz-detail-edit">
+                            <i data-lucide="pencil" style="width:14px;height:14px;"></i> 편집
+                        </button>
+                    </div>
+                </div>
+                <div class="detail-title-section" id="quiz-detail-title-section">
+                    <h2 id="quiz-detail-title">퀴즈 제목</h2>
+                    <div class="detail-meta" id="quiz-detail-meta">0문항</div>
+                </div>
+                <div class="stat-grid" id="quiz-detail-stats">
+                    <div class="stat-card">
+                        <div class="stat-label">총 응시</div>
+                        <div class="stat-value" id="qd-stat-players">0명</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">평균 점수</div>
+                        <div class="stat-value" id="qd-stat-avg-score">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">평균 정답률</div>
+                        <div class="stat-value" id="qd-stat-avg-rate">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="dash-card" style="margin-top:var(--space-lg);">
+                <div class="sub-tab-group" id="qd-sub-tabs">
+                    <div class="sub-tab-item active" data-subtab="qd-results">개별 결과</div>
+                    <div class="sub-tab-item" data-subtab="qd-analysis">문항 분석</div>
+                </div>
+                <div id="qd-tab-results">
+                    <table class="dash-table" id="qd-results-table">
+                        <thead><tr><th style="width:28px;"></th><th>학생</th><th>학급</th><th>점수</th><th>정답률</th><th>날짜</th></tr></thead>
+                        <tbody id="qd-results-body"></tbody>
+                    </table>
+                    <div id="qd-results-empty" class="empty-box" style="display:none;">응시 결과가 없습니다.</div>
+                </div>
+                <div id="qd-tab-analysis" style="display:none;">
+                    <div id="qd-analysis-content"></div>
+                    <div id="qd-analysis-empty" class="empty-box" style="display:none;">분석할 데이터가 없습니다.</div>
+                </div>
+            </div>
+        </div>
+
         <!-- ===== 탭 2: 학급 관리 ===== -->
         <div class="view" id="view-classes">
             <div class="dash-card">
@@ -397,10 +592,39 @@
                     </div>
                 </div>
                 <table class="dash-table" id="roster-table">
-                    <thead><tr><th>번호</th><th>이름</th><th>입장코드</th><th style="text-align:right;">삭제</th></tr></thead>
+                    <thead><tr><th>번호</th><th>이름</th><th>입장코드</th><th>플레이</th><th style="text-align:right;">삭제</th></tr></thead>
                     <tbody id="roster-body"></tbody>
                 </table>
                 <div id="roster-empty" class="empty-box" style="display:none;">등록된 학생이 없습니다.</div>
+            </div>
+
+            <!-- 학생 상세 (학생 클릭 시 표시) -->
+            <div class="dash-card" id="student-detail-section" style="display:none;">
+                <div class="roster-header">
+                    <button class="btn btn-secondary btn-sm" id="btn-student-detail-back">
+                        <i data-lucide="chevron-left" style="width:16px;height:16px;"></i> <span id="student-detail-back-label">명렬표</span>
+                    </button>
+                </div>
+                <div class="detail-title-section" style="margin-bottom:var(--space-xl);">
+                    <h2 id="student-detail-name">학생 이름</h2>
+                </div>
+                <div class="stat-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">총 플레이</div>
+                        <div class="stat-value" id="sd-stat-plays">0회</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">평균 점수</div>
+                        <div class="stat-value" id="sd-stat-avg-score">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">평균 정답률</div>
+                        <div class="stat-value" id="sd-stat-avg-rate">-</div>
+                    </div>
+                </div>
+                <div style="font-weight:700;font-size:var(--font-size-sm);color:var(--text-primary);margin-bottom:var(--space-md);">퀴즈 히스토리</div>
+                <div id="student-history-list"></div>
+                <div id="student-history-empty" class="empty-box" style="display:none;">플레이 기록이 없습니다.</div>
             </div>
         </div>
 
@@ -413,23 +637,19 @@
                 <div class="filter-row">
                     <select id="filter-class"><option value="">전체 학급</option></select>
                     <select id="filter-quiz"><option value="">전체 퀴즈</option></select>
+                    <select id="filter-game"><option value="">전체 게임</option><option value="mole">두더지</option><option value="runner">러너</option></select>
                     <input type="date" id="filter-date-from" placeholder="시작일">
                     <input type="date" id="filter-date-to" placeholder="종료일">
                     <button class="btn btn-sm btn-primary" id="btn-filter">조회</button>
                 </div>
                 <table class="dash-table" id="results-table">
-                    <thead><tr><th>학생</th><th>퀴즈</th><th>학급</th><th>점수</th><th>정답률</th><th>날짜</th></tr></thead>
+                    <thead><tr><th>학생</th><th>게임</th><th>퀴즈</th><th>학급</th><th>점수</th><th>정답률</th><th>날짜</th><th>상세</th></tr></thead>
                     <tbody id="results-body"></tbody>
                 </table>
                 <div id="results-empty" class="empty-box" style="display:none;">조회된 결과가 없습니다.</div>
-            </div>
-
-            <!-- 문항 분석 -->
-            <div class="dash-card" id="analysis-section" style="display:none;">
-                <div class="dash-card-header">
-                    <div class="dash-card-title" id="analysis-title">문항 분석</div>
+                <div id="results-load-more" class="load-more-wrap" style="display:none;">
+                    <button class="btn btn-secondary btn-sm" id="btn-load-more">더 보기</button>
                 </div>
-                <div id="analysis-content"></div>
             </div>
         </div>
 
@@ -529,6 +749,18 @@
         </div>
     </div>
 
+    <!-- ===== 모달: 결과 상세 ===== -->
+    <div class="sheet-modal-bg" id="modal-result-detail">
+        <div class="sheet-modal" style="max-width:880px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-lg);">
+                <h3 id="result-detail-title" style="font-weight:800;font-size:var(--font-size-xl);">학생 상세 결과</h3>
+                <button class="btn btn-secondary btn-sm" id="btn-result-detail-close">닫기</button>
+            </div>
+            <div id="result-detail-meta" class="text-caption" style="margin-bottom:var(--space-lg);"></div>
+            <div id="result-detail-body" style="max-height:60vh;overflow-y:auto;padding-right:4px;"></div>
+        </div>
+    </div>
+
     <!-- ===== 모달: 스프레드시트 일괄 등록 ===== -->
     <div class="sheet-modal-bg" id="modal-sheet">
         <div class="sheet-modal">
@@ -567,6 +799,17 @@
 
         // Spreadsheet grid data
         var gridData = [['', '', '', '', '']];
+
+        // Quiz detail state
+        var currentQuizDetail = null;
+        var quizDetailResults = [];
+
+        // Class results cache (for student detail)
+        var classResultsCache = [];
+
+        // Results pagination
+        var allResultsCache = [];
+        var resultsDisplayCount = 20;
 
         // ─── 인증 가드 (onAuthReady: 인증 상태가 완전히 복원된 후 판단) ───
 
@@ -608,6 +851,39 @@
             document.getElementById('btn-add-problem').addEventListener('click', addEmptyProblem);
             document.getElementById('btn-filter').addEventListener('click', loadResults);
 
+            // 퀴즈 상세 뷰 버튼
+            document.getElementById('btn-quiz-detail-back').addEventListener('click', function () {
+                switchToView('view-quizzes');
+                loadQuizzes();
+            });
+            document.getElementById('btn-quiz-detail-edit').addEventListener('click', function () {
+                if (currentQuizDetail) openEditor(currentQuizDetail);
+            });
+
+            // 퀴즈 상세 서브탭
+            document.querySelectorAll('#qd-sub-tabs .sub-tab-item').forEach(function (tab) {
+                tab.addEventListener('click', function () {
+                    document.querySelectorAll('#qd-sub-tabs .sub-tab-item').forEach(function (t) {
+                        t.classList.toggle('active', t === tab);
+                    });
+                    var target = tab.dataset.subtab;
+                    document.getElementById('qd-tab-results').style.display = target === 'qd-results' ? 'block' : 'none';
+                    document.getElementById('qd-tab-analysis').style.display = target === 'qd-analysis' ? 'block' : 'none';
+                });
+            });
+
+            // 학생 상세 뒤로가기
+            document.getElementById('btn-student-detail-back').addEventListener('click', function () {
+                document.getElementById('student-detail-section').style.display = 'none';
+                document.getElementById('roster-section').style.display = 'block';
+            });
+
+            // 결과 더 보기
+            document.getElementById('btn-load-more').addEventListener('click', function () {
+                resultsDisplayCount += 20;
+                renderResultsTable();
+            });
+
             // 에디터 레인지 슬라이더
             document.getElementById('editor-mole-count').addEventListener('input', function () {
                 document.getElementById('editor-mole-label').textContent = this.value;
@@ -638,6 +914,9 @@
             });
             document.getElementById('btn-sheet-close').addEventListener('click', function () { hideModal('modal-sheet'); });
 
+            // 결과 상세 모달
+            document.getElementById('btn-result-detail-close').addEventListener('click', function () { hideModal('modal-result-detail'); });
+
             // Lucide 아이콘 초기화
             lucide.createIcons();
 
@@ -657,7 +936,12 @@
             document.getElementById('view-' + tab).classList.add('active');
 
             if (tab === 'quizzes') loadQuizzes();
-            else if (tab === 'classes') loadClasses();
+            else if (tab === 'classes') {
+                loadClasses();
+                // 학생 상세/명렬표 상태 리셋
+                document.getElementById('student-detail-section').style.display = 'none';
+                document.getElementById('roster-section').style.display = 'none';
+            }
             else if (tab === 'results') { populateFilterDropdowns(); loadResults(); }
         }
 
@@ -699,6 +983,15 @@
                         '</div>';
                 }).join('');
                 lucide.createIcons();
+
+                // 퀴즈 항목 클릭 → 상세 보기
+                list.querySelectorAll('.quiz-item').forEach(function (item) {
+                    item.addEventListener('click', function () {
+                        var id = item.dataset.id;
+                        var q = quizzes.find(function (x) { return x.id === id; });
+                        if (q) openQuizDetail(q);
+                    });
+                });
 
                 // 편집 이벤트
                 list.querySelectorAll('.quiz-edit').forEach(function (btn) {
@@ -817,6 +1110,222 @@
             } catch (err) {
                 UIKit.showToast('저장 실패: ' + err.message, { type: 'error' });
             }
+        }
+
+        // ─── 퀴즈 상세 뷰 ───
+
+        async function openQuizDetail(quiz) {
+            currentQuizDetail = quiz;
+            document.getElementById('quiz-detail-title').textContent = quiz.title;
+            var count = quiz.problemCount || (quiz.problems ? quiz.problems.length : 0);
+            document.getElementById('quiz-detail-meta').textContent =
+                count + '문항 · 두더지 ' + (quiz.moleCount || 6) + '마리 · ' + (quiz.timeLimit || 30) + '초';
+
+            // Reset sub-tabs
+            document.querySelectorAll('#qd-sub-tabs .sub-tab-item').forEach(function (t) {
+                t.classList.toggle('active', t.dataset.subtab === 'qd-results');
+            });
+            document.getElementById('qd-tab-results').style.display = 'block';
+            document.getElementById('qd-tab-analysis').style.display = 'none';
+
+            // Clear previous data
+            document.getElementById('qd-results-body').innerHTML = '';
+            document.getElementById('qd-stat-players').textContent = '...';
+            document.getElementById('qd-stat-avg-score').textContent = '...';
+            document.getElementById('qd-stat-avg-rate').textContent = '...';
+
+            switchToView('view-quiz-detail');
+            lucide.createIcons();
+
+            try {
+                quizDetailResults = await QuizBridge.getResults({ setId: quiz.id });
+                renderQuizDetailStats(quizDetailResults);
+                renderQuizDetailResults(quizDetailResults);
+                renderQuizDetailAnalysis(quiz, quizDetailResults);
+            } catch (err) {
+                UIKit.showToast('결과 조회 실패: ' + err.message, { type: 'error' });
+            }
+        }
+
+        function renderQuizDetailStats(results) {
+            var count = results.length;
+            document.getElementById('qd-stat-players').textContent = count + '명';
+
+            if (count === 0) {
+                document.getElementById('qd-stat-avg-score').textContent = '-';
+                document.getElementById('qd-stat-avg-rate').textContent = '-';
+                return;
+            }
+
+            var scoreSum = 0, correctSum = 0, totalSum = 0;
+            results.forEach(function (r) {
+                scoreSum += Number(r.score || 0);
+                correctSum += Number(r.correctCount || 0);
+                totalSum += Number(r.totalCount || 0);
+            });
+
+            document.getElementById('qd-stat-avg-score').textContent = Math.round(scoreSum / count);
+            document.getElementById('qd-stat-avg-rate').textContent =
+                totalSum > 0 ? Math.round(correctSum / totalSum * 100) + '%' : '-';
+        }
+
+        function renderQuizDetailResults(results) {
+            var tbody = document.getElementById('qd-results-body');
+            var empty = document.getElementById('qd-results-empty');
+
+            if (results.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+
+            var quiz = currentQuizDetail;
+
+            tbody.innerHTML = results.map(function (r, idx) {
+                var total = Number(r.totalCount || 0);
+                var correct = Number(r.correctCount || 0);
+                var rate = total > 0 ? Math.round(correct / total * 100) : 0;
+                var rateColor = rate >= 70 ? '#059669' : (rate >= 40 ? '#d97706' : '#dc2626');
+                var dateDisplay = formatDateShort(r);
+
+                var answers = r.detailedAnswers || [];
+                var detailHtml = renderCompactAnswers(answers, quiz);
+
+                return '<tr class="accordion-row" data-aidx="' + idx + '">' +
+                    '<td><span class="expand-icon">&#9654;</span></td>' +
+                    '<td style="font-weight:700;">' + esc(r.studentName) + '</td>' +
+                    '<td>' + esc(r.className || '-') + '</td>' +
+                    '<td><span class="score-badge">' + Number(r.score || 0) + '</span></td>' +
+                    '<td style="font-weight:700;color:' + rateColor + ';">' + correct + '/' + total + ' (' + rate + '%)</td>' +
+                    '<td style="color:var(--text-tertiary);font-size:12px;white-space:nowrap;">' + dateDisplay + '</td>' +
+                    '</tr>' +
+                    '<tr class="accordion-detail" data-aidx="' + idx + '">' +
+                    '<td colspan="6"><div class="accordion-content">' +
+                    (detailHtml || '<div style="color:var(--text-tertiary);font-size:13px;">문항별 데이터 없음</div>') +
+                    '</div></td></tr>';
+            }).join('');
+
+            bindAccordionRows(tbody, 'aidx');
+        }
+
+        function renderQuizDetailAnalysis(quiz, results) {
+            var content = document.getElementById('qd-analysis-content');
+            var empty = document.getElementById('qd-analysis-empty');
+
+            if (!quiz || !quiz.problems || !quiz.problems.length || results.length === 0) {
+                content.innerHTML = '';
+                empty.style.display = 'block';
+                return;
+            }
+            empty.style.display = 'none';
+
+            var totalPlayers = results.length;
+            var allAnswers = results.flatMap(function (r) { return r.detailedAnswers || []; });
+
+            content.innerHTML = quiz.problems.map(function (p, i) {
+                var ans = allAnswers.filter(function (da) { return da.questionIndex === i; });
+                var corrects = ans.filter(function (da) { return da.isCorrect; }).length;
+                var wrongs = ans.length - corrects;
+                var rate = ans.length > 0 ? Math.round(corrects / ans.length * 100) : 0;
+
+                var diffLabel, diffColor, diffBg;
+                if (ans.length === 0) { diffLabel = '데이터 없음'; diffColor = '#94a3b8'; diffBg = '#f1f5f9'; }
+                else if (rate >= 80) { diffLabel = '쉬움'; diffColor = '#059669'; diffBg = '#ecfdf5'; }
+                else if (rate >= 50) { diffLabel = '보통'; diffColor = '#d97706'; diffBg = '#fffbeb'; }
+                else { diffLabel = '어려움'; diffColor = '#dc2626'; diffBg = '#fef2f2'; }
+
+                var barColor = rate >= 70 ? '#059669' : (rate >= 40 ? '#d97706' : '#dc2626');
+
+                var wrongAnswerMap = {};
+                ans.forEach(function (da) {
+                    if (da.isCorrect) return;
+                    var sel = da.selectedAnswer || da.selected || null;
+                    if (sel && sel !== 'null') { wrongAnswerMap[sel] = (wrongAnswerMap[sel] || 0) + 1; }
+                });
+                var topWrong = Object.keys(wrongAnswerMap)
+                    .map(function (k) { return { answer: k, count: wrongAnswerMap[k] }; })
+                    .sort(function (a, b) { return b.count - a.count; })
+                    .slice(0, 3);
+                var wrongHtml = '';
+                if (topWrong.length > 0) {
+                    wrongHtml = '<div style="margin-top:6px;font-size:11px;color:var(--text-tertiary);">주요 오답: ' +
+                        topWrong.map(function (w) {
+                            return '<span style="background:#fef2f2;color:#dc2626;padding:1px 6px;border-radius:4px;font-weight:600;">' + esc(w.answer) + '</span> (' + w.count + '명)';
+                        }).join(', ') + '</div>';
+                }
+
+                return '<div style="border:1px solid #f1f5f9;border-radius:10px;padding:12px 14px;margin-bottom:10px;">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">' +
+                    '<div style="font-weight:700;color:var(--text-primary);font-size:var(--font-size-sm);max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Q' + (i + 1) + '. ' + esc(p.question) + '</div>' +
+                    '<div style="display:flex;align-items:center;gap:8px;">' +
+                    '<span style="background:' + diffBg + ';color:' + diffColor + ';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;">' + diffLabel + '</span>' +
+                    '<span style="font-weight:800;color:' + barColor + ';font-size:var(--font-size-sm);">' + rate + '%</span>' +
+                    '</div></div>' +
+                    '<div style="width:100%;background:#f1f5f9;height:8px;border-radius:4px;overflow:hidden;margin-bottom:4px;">' +
+                    '<div style="height:100%;width:' + rate + '%;background:' + barColor + ';transition:width 0.8s;border-radius:4px;"></div></div>' +
+                    '<div style="display:flex;gap:12px;font-size:11px;color:var(--text-tertiary);">' +
+                    '<span>응답 ' + ans.length + '명</span>' +
+                    '<span style="color:#059669;">정답 ' + corrects + '</span>' +
+                    '<span style="color:#dc2626;">오답 ' + wrongs + '</span>' +
+                    '<span>정답: <b style="color:var(--text-primary);">' + esc(p.answer) + '</b></span>' +
+                    '</div>' + wrongHtml + '</div>';
+            }).join('');
+        }
+
+        // ─── 공통 헬퍼 ───
+
+        function formatDateShort(r) {
+            if (r.timestamp && r.timestamp.seconds) {
+                var d = new Date(r.timestamp.seconds * 1000);
+                return String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(d.getDate()).padStart(2, '0');
+            }
+            return r.dateStr || '-';
+        }
+
+        function formatDateFull(r) {
+            if (r.timestamp && r.timestamp.seconds) {
+                var d = new Date(r.timestamp.seconds * 1000);
+                return d.getFullYear() + '-' +
+                    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(d.getDate()).padStart(2, '0') + ' ' +
+                    String(d.getHours()).padStart(2, '0') + ':' +
+                    String(d.getMinutes()).padStart(2, '0');
+            }
+            return r.dateStr || '-';
+        }
+
+        function renderCompactAnswers(answers, quiz) {
+            if (!answers || !answers.length) return '';
+            return answers.map(function (a, aIdx) {
+                var qIndex = (typeof a.questionIndex === 'number') ? a.questionIndex : aIdx;
+                var qText = (quiz && quiz.problems && quiz.problems[qIndex]) ? quiz.problems[qIndex].question : '';
+                var label = 'Q' + (qIndex + 1) + '. ' + esc(qText);
+                var selected = extractStudentAnswer(a);
+                var correctAns = extractCorrectAnswer(a, quiz, aIdx);
+
+                if (a.isCorrect) {
+                    var timeStr = (typeof a.elapsedMs === 'number') ? ' (' + (a.elapsedMs / 1000).toFixed(1) + '초)' : '';
+                    return '<div class="compact-answer"><span class="q-correct">' + label + ' &#10003;' + timeStr + '</span></div>';
+                } else if (a.timedOut) {
+                    return '<div class="compact-answer"><span class="q-timeout">' + label + ' &#9200; 시간초과 → 정답: ' + esc(String(correctAns || '-')) + '</span></div>';
+                } else {
+                    return '<div class="compact-answer"><span class="q-wrong">' + label + ' &#10007; 학생: ' + esc(String(selected || '-')) + ' → 정답: ' + esc(String(correctAns || '-')) + '</span></div>';
+                }
+            }).join('');
+        }
+
+        function bindAccordionRows(container, attr) {
+            container.querySelectorAll('.accordion-row').forEach(function (row) {
+                row.addEventListener('click', function () {
+                    var idx = row.dataset[attr];
+                    var detail = container.querySelector('.accordion-detail[data-' + attr + '="' + idx + '"]');
+                    var icon = row.querySelector('.expand-icon');
+                    if (detail) detail.classList.toggle('open');
+                    if (icon) icon.classList.toggle('rotated');
+                });
+            });
         }
 
         // ─── 스프레드시트 일괄 등록 ───
@@ -978,10 +1487,28 @@
 
         async function loadRoster() {
             if (!selectedClassForRoster) return;
+            // 학생 상세가 열려있으면 숨기고 명렬표 표시
+            document.getElementById('student-detail-section').style.display = 'none';
+            document.getElementById('roster-section').style.display = 'block';
+
             try {
                 var students = await QuizBridge.getStudents(selectedClassForRoster.id);
                 students.sort(function (a, b) {
                     return String(a.number).localeCompare(String(b.number), undefined, { numeric: true });
+                });
+
+                // 학급 결과 prefetch (플레이 횟수 계산용)
+                try {
+                    classResultsCache = await QuizBridge.getResults({ classId: selectedClassForRoster.id });
+                } catch (e) {
+                    classResultsCache = [];
+                }
+
+                // 학생별 플레이 횟수 계산
+                var playCounts = {};
+                classResultsCache.forEach(function (r) {
+                    var key = r.studentCode || r.studentName || '';
+                    playCounts[key] = (playCounts[key] || 0) + 1;
                 });
 
                 var tbody = document.getElementById('roster-body');
@@ -994,17 +1521,36 @@
                 }
                 empty.style.display = 'none';
                 tbody.innerHTML = students.map(function (s) {
-                    return '<tr>' +
+                    var playKey = s.code || s.name || '';
+                    var plays = playCounts[playKey] || 0;
+                    return '<tr class="student-clickable" data-stu-id="' + s.id + '" data-stu-code="' + esc(s.code) + '" data-stu-name="' + esc(s.name) + '" data-stu-number="' + s.number + '">' +
                         '<td style="font-family:monospace;color:var(--text-tertiary);">' + s.number + '번</td>' +
                         '<td style="font-weight:700;">' + esc(s.name) + '</td>' +
                         '<td><span style="background:#ecfdf5;color:#059669;padding:4px 12px;border-radius:8px;font-family:monospace;font-weight:700;font-size:13px;">' + esc(s.code) + '</span></td>' +
+                        '<td>' + (plays > 0 ? '<span class="play-badge">' + plays + '회</span>' : '<span style="color:var(--text-tertiary);font-size:12px;">-</span>') + '</td>' +
                         '<td style="text-align:right;"><button class="icon-btn stu-del" data-id="' + s.id + '" title="삭제"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button></td>' +
                         '</tr>';
                 }).join('');
                 lucide.createIcons();
 
+                // 학생 행 클릭 → 학생 상세
+                tbody.querySelectorAll('.student-clickable').forEach(function (row) {
+                    row.addEventListener('click', function (e) {
+                        if (e.target.closest('.stu-del')) return;
+                        var student = {
+                            id: row.dataset.stuId,
+                            code: row.dataset.stuCode,
+                            name: row.dataset.stuName,
+                            number: row.dataset.stuNumber
+                        };
+                        openStudentDetail(student);
+                    });
+                });
+
+                // 삭제 버튼
                 tbody.querySelectorAll('.stu-del').forEach(function (btn) {
-                    btn.addEventListener('click', async function () {
+                    btn.addEventListener('click', async function (e) {
+                        e.stopPropagation();
                         if (!confirm('학생을 삭제하시겠습니까?')) return;
                         try {
                             await QuizBridge.removeStudent(btn.dataset.id, selectedClassForRoster.id);
@@ -1019,6 +1565,110 @@
             } catch (err) {
                 UIKit.showToast('명렬표 로드 실패: ' + err.message, { type: 'error' });
             }
+        }
+
+        // ─── 학생 상세 ───
+
+        async function openStudentDetail(student) {
+            // 명렬표 숨기고 학생 상세 표시
+            document.getElementById('roster-section').style.display = 'none';
+            document.getElementById('student-detail-section').style.display = 'block';
+
+            // 퀴즈셋 캐시 확보 (문항 텍스트 표시용)
+            if (cachedQuizSets.length === 0) {
+                try { cachedQuizSets = await QuizBridge.getQuizSets(); } catch (e) { /* ignore */ }
+            }
+
+            // 뒤로가기 라벨
+            var cls = selectedClassForRoster;
+            document.getElementById('student-detail-back-label').textContent =
+                (cls ? cls.name : '') + ' 명렬표';
+
+            // 학생 이름
+            document.getElementById('student-detail-name').textContent =
+                student.number + '번 ' + student.name;
+
+            // classResultsCache에서 해당 학생 필터링
+            var studentResults = classResultsCache.filter(function (r) {
+                if (student.code && r.studentCode) return r.studentCode === student.code;
+                return r.studentName === student.name;
+            });
+
+            // 통계 계산
+            var plays = studentResults.length;
+            document.getElementById('sd-stat-plays').textContent = plays + '회';
+
+            if (plays === 0) {
+                document.getElementById('sd-stat-avg-score').textContent = '-';
+                document.getElementById('sd-stat-avg-rate').textContent = '-';
+                document.getElementById('student-history-list').innerHTML = '';
+                document.getElementById('student-history-empty').style.display = 'block';
+                lucide.createIcons();
+                return;
+            }
+
+            var scoreSum = 0, correctSum = 0, totalSum = 0;
+            studentResults.forEach(function (r) {
+                scoreSum += Number(r.score || 0);
+                correctSum += Number(r.correctCount || 0);
+                totalSum += Number(r.totalCount || 0);
+            });
+
+            document.getElementById('sd-stat-avg-score').textContent = Math.round(scoreSum / plays);
+            document.getElementById('sd-stat-avg-rate').textContent =
+                totalSum > 0 ? Math.round(correctSum / totalSum * 100) + '%' : '-';
+
+            // 퀴즈 히스토리 렌더링
+            document.getElementById('student-history-empty').style.display = 'none';
+            var histList = document.getElementById('student-history-list');
+
+            histList.innerHTML = studentResults.map(function (r, idx) {
+                var gameLabel = r.gameType === 'runner' ? '러너' : '두더지';
+                var gameBg = r.gameType === 'runner' ? '#eff6ff' : '#f0fdf4';
+                var gameColor = r.gameType === 'runner' ? '#2563eb' : '#16a34a';
+                var total = Number(r.totalCount || 0);
+                var correct = Number(r.correctCount || 0);
+                var dateDisplay = formatDateShort(r);
+
+                // 퀴즈셋 찾기 (문항 텍스트 표시용)
+                var quiz = null;
+                if (r.setId && cachedQuizSets.length > 0) {
+                    quiz = cachedQuizSets.find(function (q) { return q.id === r.setId; }) || null;
+                }
+
+                var answers = r.detailedAnswers || [];
+                var detailHtml = renderCompactAnswers(answers, quiz);
+
+                return '<div class="history-card">' +
+                    '<div class="history-card-header" data-hidx="' + idx + '">' +
+                    '<div style="display:flex;align-items:center;gap:var(--space-sm);flex:1;min-width:0;">' +
+                    '<span class="expand-icon" style="flex-shrink:0;">&#9654;</span>' +
+                    '<span style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.quizSetTitle || '퀴즈') + '</span>' +
+                    '<span style="background:' + gameBg + ';color:' + gameColor + ';padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;flex-shrink:0;">' + gameLabel + '</span>' +
+                    '</div>' +
+                    '<div style="display:flex;align-items:center;gap:var(--space-md);flex-shrink:0;">' +
+                    '<span style="font-weight:700;font-size:var(--font-size-sm);">' + correct + '/' + total + '</span>' +
+                    '<span style="color:var(--text-tertiary);font-size:12px;">' + dateDisplay + '</span>' +
+                    '</div>' +
+                    '</div>' +
+                    '<div class="history-card-body" data-hidx="' + idx + '">' +
+                    (detailHtml || '<div style="color:var(--text-tertiary);font-size:13px;">문항별 데이터 없음</div>') +
+                    '</div>' +
+                    '</div>';
+            }).join('');
+
+            // 아코디언 토글
+            histList.querySelectorAll('.history-card-header').forEach(function (header) {
+                header.addEventListener('click', function () {
+                    var idx = header.dataset.hidx;
+                    var body = histList.querySelector('.history-card-body[data-hidx="' + idx + '"]');
+                    var icon = header.querySelector('.expand-icon');
+                    if (body) body.classList.toggle('open');
+                    if (icon) icon.classList.toggle('rotated');
+                });
+            });
+
+            lucide.createIcons();
         }
 
         async function batchAddStudents() {
@@ -1108,73 +1758,201 @@
             var filters = {};
             var classId = document.getElementById('filter-class').value;
             var setId = document.getElementById('filter-quiz').value;
+            var gameType = document.getElementById('filter-game').value;
             var dateFrom = document.getElementById('filter-date-from').value;
             var dateTo = document.getElementById('filter-date-to').value;
             if (classId) filters.classId = classId;
             if (setId) filters.setId = setId;
+            if (gameType) filters.gameType = gameType;
             if (dateFrom) filters.dateFrom = dateFrom;
             if (dateTo) filters.dateTo = dateTo;
 
             try {
-                var results = await QuizBridge.getResults(filters);
-                var tbody = document.getElementById('results-body');
-                var empty = document.getElementById('results-empty');
-
-                if (results.length === 0) {
-                    tbody.innerHTML = '';
-                    empty.style.display = 'block';
-                    document.getElementById('analysis-section').style.display = 'none';
-                    return;
-                }
-                empty.style.display = 'none';
-                tbody.innerHTML = results.map(function (r) {
-                    var rate = r.totalCount > 0 ? Math.round(r.correctCount / r.totalCount * 100) : 0;
-                    return '<tr>' +
-                        '<td style="font-weight:700;">' + esc(r.studentName) + '</td>' +
-                        '<td>' + esc(r.quizSetTitle || '-') + '</td>' +
-                        '<td>' + esc(r.className || '-') + '</td>' +
-                        '<td><span class="score-badge">' + r.score + '</span></td>' +
-                        '<td>' + r.correctCount + '/' + r.totalCount + ' (' + rate + '%)</td>' +
-                        '<td style="color:var(--text-tertiary);font-size:13px;">' + (r.dateStr || '-') + '</td>' +
-                        '</tr>';
-                }).join('');
-
-                // 문항 분석 (퀴즈 필터가 선택된 경우)
-                if (setId) {
-                    showAnalysis(setId, results);
-                } else {
-                    document.getElementById('analysis-section').style.display = 'none';
-                }
+                allResultsCache = await QuizBridge.getResults(filters);
+                resultsDisplayCount = 20;
+                renderResultsTable();
             } catch (err) {
                 UIKit.showToast('결과 조회 실패: ' + err.message, { type: 'error' });
             }
         }
 
-        function showAnalysis(setId, results) {
-            var quiz = cachedQuizSets.find(function (q) { return q.id === setId; });
-            if (!quiz || !quiz.problems) {
-                document.getElementById('analysis-section').style.display = 'none';
+        function renderResultsTable() {
+            var results = allResultsCache;
+            var tbody = document.getElementById('results-body');
+            var empty = document.getElementById('results-empty');
+            var loadMoreEl = document.getElementById('results-load-more');
+
+            if (results.length === 0) {
+                tbody.innerHTML = '';
+                empty.style.display = 'block';
+                loadMoreEl.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+
+            var showing = results.slice(0, resultsDisplayCount);
+            tbody.innerHTML = showing.map(function (r) {
+                var total = Number(r.totalCount || 0);
+                var correct = Number(r.correctCount || 0);
+                var rate = total > 0 ? Math.round(correct / total * 100) : 0;
+                var gameLabel = r.gameType === 'runner' ? '러너' : '두더지';
+                var dateDisplay = formatDateFull(r);
+                var rateColor = rate >= 70 ? 'color:#059669;' : (rate >= 40 ? 'color:#d97706;' : 'color:#dc2626;');
+                return '<tr>' +
+                    '<td style="font-weight:700;">' + esc(r.studentName) + '</td>' +
+                    '<td><span style="background:' + (r.gameType === 'runner' ? '#eff6ff' : '#f0fdf4') + ';color:' + (r.gameType === 'runner' ? '#2563eb' : '#16a34a') + ';padding:2px 8px;border-radius:6px;font-size:12px;font-weight:700;">' + gameLabel + '</span></td>' +
+                    '<td>' + esc(r.quizSetTitle || '-') + '</td>' +
+                    '<td>' + esc(r.className || '-') + '</td>' +
+                    '<td><span class="score-badge">' + Number(r.score || 0) + '</span></td>' +
+                    '<td style="font-weight:700;' + rateColor + '">' + correct + '/' + total + ' (' + rate + '%)</td>' +
+                    '<td style="color:var(--text-tertiary);font-size:12px;white-space:nowrap;">' + dateDisplay + '</td>' +
+                    '<td><button class="btn btn-secondary btn-sm btn-result-detail" data-id="' + esc(r.id) + '">상세</button></td>' +
+                    '</tr>';
+            }).join('');
+
+            // 행별 상세 보기
+            tbody.querySelectorAll('.btn-result-detail').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var id = btn.getAttribute('data-id');
+                    var found = results.find(function (x) { return String(x.id) === String(id); });
+                    if (found) openResultDetailModal(found);
+                });
+            });
+
+            // 더 보기 버튼
+            if (resultsDisplayCount < results.length) {
+                loadMoreEl.style.display = 'block';
+                document.getElementById('btn-load-more').textContent =
+                    '더 보기 (' + Math.min(resultsDisplayCount, results.length) + '/' + results.length + ')';
+            } else {
+                loadMoreEl.style.display = 'none';
+            }
+        }
+
+        // renderStudentStats 제거됨 — 학생 통계는 학급관리 > 학생 상세에서 표시
+
+        /**
+         * detailedAnswers에서 학생 답/정답을 안전하게 추출 (하위 호환 fallback)
+         *
+         * 기존 포맷 정리:
+         *   두더지(구): { questionIndex, isCorrect } → 답 정보 없음
+         *   러너(구):   { questionIndex, selected, answer, isCorrect, timedOut, elapsedMs }
+         *                selected=학생답, answer=정답
+         *   공통(신):   { questionIndex, selectedAnswer, correctAnswer, isCorrect, ... }
+         */
+        function extractStudentAnswer(a) {
+            // 신규 포맷 우선, 러너 레거시(selected) fallback
+            return a.selectedAnswer || a.selected || null;
+        }
+        function extractCorrectAnswer(a, quiz, idx) {
+            // 신규 포맷 우선, 러너 레거시(answer) fallback, 퀴즈셋 lookup 최후 fallback
+            if (a.correctAnswer) return a.correctAnswer;
+            if (a.answerKey) return a.answerKey;
+            // 러너 레거시: 'answer' 필드가 정답
+            if (a.answer) return a.answer;
+            // 퀴즈셋에서 정답 조회
+            var qIndex = (typeof a.questionIndex === 'number') ? a.questionIndex : idx;
+            if (quiz && quiz.problems && quiz.problems[qIndex]) {
+                return quiz.problems[qIndex].answer || null;
+            }
+            return null;
+        }
+
+        function openResultDetailModal(result) {
+            var title = document.getElementById('result-detail-title');
+            var meta = document.getElementById('result-detail-meta');
+            var body = document.getElementById('result-detail-body');
+
+            var gameLabel = result.gameType === 'runner' ? '러너' : '두더지';
+            var total = Number(result.totalCount || 0);
+            var correct = Number(result.correctCount || 0);
+            var rate = total > 0 ? Math.round(correct / total * 100) : 0;
+
+            title.textContent = (result.studentName || '학생') + ' · 상세 결과';
+
+            // 메타 정보: 날짜/시간 포함, 러너 전용 데이터 포함
+            var metaParts = [
+                '게임: ' + gameLabel,
+                '퀴즈: ' + (result.quizSetTitle || '-'),
+                '학급: ' + (result.className || '-'),
+                '점수: ' + Number(result.score || 0) + '점',
+                '정답률: ' + correct + '/' + total + ' (' + rate + '%)'
+            ];
+
+            // 날짜 표시: timestamp가 있으면 시분까지, 없으면 dateStr
+            var dateDisplay = result.dateStr || '-';
+            if (result.timestamp && result.timestamp.seconds) {
+                var d = new Date(result.timestamp.seconds * 1000);
+                dateDisplay = d.getFullYear() + '-' +
+                    String(d.getMonth() + 1).padStart(2, '0') + '-' +
+                    String(d.getDate()).padStart(2, '0') + ' ' +
+                    String(d.getHours()).padStart(2, '0') + ':' +
+                    String(d.getMinutes()).padStart(2, '0');
+            }
+            metaParts.push('날짜: ' + dateDisplay);
+            meta.textContent = metaParts.join('  |  ');
+
+            // 러너 전용 요약 (distance, survivalTime, accuracy)
+            var runnerSummary = '';
+            if (result.gameType === 'runner') {
+                var parts = [];
+                if (result.distance) parts.push('거리: ' + Number(result.distance).toFixed(1) + 'm');
+                if (result.survivalTime) parts.push('생존: ' + Number(result.survivalTime).toFixed(1) + '초');
+                if (typeof result.accuracy === 'number' && result.accuracy > 0) parts.push('퀴즈 정확도: ' + Math.round(result.accuracy * 100) + '%');
+                if (parts.length) {
+                    runnerSummary = '<div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#0369a1;font-weight:600;">' +
+                        '🏃 러너 기록: ' + parts.join(' · ') + '</div>';
+                }
+            }
+
+            var answers = result.detailedAnswers || [];
+            if (!answers.length) {
+                body.innerHTML = runnerSummary + '<div class="empty-box">문항별 상세 데이터가 없습니다.</div>';
+                showModal('modal-result-detail');
                 return;
             }
 
-            document.getElementById('analysis-section').style.display = 'block';
-            document.getElementById('analysis-title').textContent = quiz.title + ' — 문항 분석';
+            var quiz = null;
+            if (result.setId) {
+                quiz = cachedQuizSets.find(function (q) { return q.id === result.setId; }) || null;
+            }
 
-            var content = document.getElementById('analysis-content');
-            content.innerHTML = quiz.problems.map(function (p, i) {
-                var ans = results.flatMap(function (r) { return r.detailedAnswers || []; })
-                    .filter(function (da) { return da.questionIndex === i; });
-                var corrects = ans.filter(function (da) { return da.isCorrect; }).length;
-                var rate = ans.length > 0 ? Math.round(corrects / ans.length * 100) : 0;
-                var barColor = rate > 70 ? 'var(--color-success)' : 'var(--color-secondary)';
-                return '<div style="margin-bottom:var(--space-lg);">' +
-                    '<div style="display:flex;justify-content:space-between;margin-bottom:6px;font-size:var(--font-size-sm);">' +
-                    '<span style="font-weight:600;color:var(--text-primary);max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Q' + (i + 1) + '. ' + esc(p.question) + '</span>' +
-                    '<span style="font-weight:700;color:' + barColor + ';">' + rate + '%</span></div>' +
-                    '<div style="width:100%;background:#f1f5f9;height:6px;border-radius:3px;overflow:hidden;">' +
-                    '<div style="height:100%;width:' + rate + '%;background:' + barColor + ';transition:width 0.8s;border-radius:3px;"></div></div></div>';
+            body.innerHTML = runnerSummary + answers.map(function (a, idx) {
+                var qIndex = (typeof a.questionIndex === 'number') ? a.questionIndex : idx;
+                var qText = (quiz && quiz.problems && quiz.problems[qIndex] && quiz.problems[qIndex].question)
+                    ? quiz.problems[qIndex].question
+                    : ('문항 ' + (qIndex + 1));
+                var ok = !!a.isCorrect;
+                var badge = ok
+                    ? '<span style="background:#ecfdf5;color:#059669;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800;">정답</span>'
+                    : '<span style="background:#fef2f2;color:#dc2626;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800;">오답</span>';
+
+                var selected = extractStudentAnswer(a);
+                var correctAns = extractCorrectAnswer(a, quiz, idx);
+
+                // 시간 초과 / 응답 시간 표시
+                var extras = '';
+                if (a.timedOut) {
+                    extras += '<span style="background:#fef3c7;color:#d97706;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;margin-left:6px;">시간초과</span>';
+                }
+                if (typeof a.elapsedMs === 'number' && !a.timedOut) {
+                    extras += '<span style="color:var(--text-tertiary);font-size:11px;margin-left:6px;">' + (a.elapsedMs / 1000).toFixed(1) + '초</span>';
+                }
+
+                return '<div style="border:1px solid #eef2f7;border-radius:12px;padding:12px 14px;margin-bottom:10px;' + (!ok ? 'background:#fffbfb;' : '') + '">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">' +
+                    '<div style="font-weight:700;color:var(--text-primary);">Q' + (qIndex + 1) + '. ' + esc(qText) + '</div>' +
+                    '<div>' + badge + extras + '</div>' +
+                    '</div>' +
+                    '<div style="font-size:13px;color:var(--text-secondary);">학생 답: <b style="color:' + (ok ? '#059669' : '#dc2626') + ';">' + esc(String(selected || '-')) + '</b></div>' +
+                    '<div style="font-size:13px;color:var(--text-secondary);">정답: <b>' + esc(String(correctAns || '-')) + '</b></div>' +
+                    '</div>';
             }).join('');
+
+            showModal('modal-result-detail');
         }
+
+        // showAnalysis 제거됨 — 문항 분석은 퀴즈 관리 > 퀴즈 상세에서 표시
 
         // ─── 유틸 ───
 
