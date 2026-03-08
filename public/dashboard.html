@@ -577,11 +577,16 @@
                 </div>
                 <div id="class-list"></div>
             </div>
+        </div>
 
-            <!-- 명렬표 (학급 선택 시 표시) -->
-            <div class="dash-card" id="roster-section" style="display:none;">
-                <div class="roster-header">
-                    <div class="dash-card-title" id="roster-title">명렬표</div>
+        <!-- ===== 학급 상세 뷰 (명렬표 + 학생 상세) ===== -->
+        <div class="view" id="view-class-detail">
+            <!-- 명렬표 -->
+            <div class="dash-card" id="roster-section">
+                <div class="detail-header">
+                    <button class="btn btn-secondary btn-sm" id="btn-roster-back">
+                        <i data-lucide="chevron-left" style="width:16px;height:16px;"></i> 학급 목록
+                    </button>
                     <div style="display:flex;gap:8px;">
                         <button class="btn btn-sm btn-secondary" id="btn-batch-students">
                             <i data-lucide="clipboard-paste" style="width:14px;height:14px;"></i> 일괄 등록
@@ -591,8 +596,12 @@
                         </button>
                     </div>
                 </div>
+                <div class="detail-title-section" style="margin-bottom:var(--space-xl);">
+                    <h2 id="roster-title">명렬표</h2>
+                    <div class="detail-meta" id="roster-meta"></div>
+                </div>
                 <table class="dash-table" id="roster-table">
-                    <thead><tr><th>번호</th><th>이름</th><th>입장코드</th><th>플레이</th><th style="text-align:right;">삭제</th></tr></thead>
+                    <thead><tr><th>번호</th><th>이름</th><th>플레이</th><th style="text-align:right;">삭제</th></tr></thead>
                     <tbody id="roster-body"></tbody>
                 </table>
                 <div id="roster-empty" class="empty-box" style="display:none;">등록된 학생이 없습니다.</div>
@@ -600,7 +609,7 @@
 
             <!-- 학생 상세 (학생 클릭 시 표시) -->
             <div class="dash-card" id="student-detail-section" style="display:none;">
-                <div class="roster-header">
+                <div class="detail-header">
                     <button class="btn btn-secondary btn-sm" id="btn-student-detail-back">
                         <i data-lucide="chevron-left" style="width:16px;height:16px;"></i> <span id="student-detail-back-label">명렬표</span>
                     </button>
@@ -872,7 +881,13 @@
                 });
             });
 
-            // 학생 상세 뒤로가기
+            // 명렬표 뒤로가기 → 학급 목록
+            document.getElementById('btn-roster-back').addEventListener('click', function () {
+                switchToView('view-classes');
+                loadClasses();
+            });
+
+            // 학생 상세 뒤로가기 → 명렬표
             document.getElementById('btn-student-detail-back').addEventListener('click', function () {
                 document.getElementById('student-detail-section').style.display = 'none';
                 document.getElementById('roster-section').style.display = 'block';
@@ -936,12 +951,7 @@
             document.getElementById('view-' + tab).classList.add('active');
 
             if (tab === 'quizzes') loadQuizzes();
-            else if (tab === 'classes') {
-                loadClasses();
-                // 학생 상세/명렬표 상태 리셋
-                document.getElementById('student-detail-section').style.display = 'none';
-                document.getElementById('roster-section').style.display = 'none';
-            }
+            else if (tab === 'classes') loadClasses();
             else if (tab === 'results') { populateFilterDropdowns(); loadResults(); }
         }
 
@@ -1480,17 +1490,19 @@
 
         async function openRoster(cls) {
             selectedClassForRoster = cls;
+            document.getElementById('roster-title').textContent = cls.name;
+            document.getElementById('roster-meta').textContent =
+                (cls.grade || '') + '학년 ' + (cls.classNum || '') + '반 · ' + (cls.studentCount || 0) + '명';
+            // 명렬표 보이기, 학생 상세 숨기기
             document.getElementById('roster-section').style.display = 'block';
-            document.getElementById('roster-title').textContent = cls.name + ' 명렬표';
+            document.getElementById('student-detail-section').style.display = 'none';
+            switchToView('view-class-detail');
+            lucide.createIcons();
             await loadRoster();
         }
 
         async function loadRoster() {
             if (!selectedClassForRoster) return;
-            // 학생 상세가 열려있으면 숨기고 명렬표 표시
-            document.getElementById('student-detail-section').style.display = 'none';
-            document.getElementById('roster-section').style.display = 'block';
-
             try {
                 var students = await QuizBridge.getStudents(selectedClassForRoster.id);
                 students.sort(function (a, b) {
@@ -1526,7 +1538,6 @@
                     return '<tr class="student-clickable" data-stu-id="' + s.id + '" data-stu-code="' + esc(s.code) + '" data-stu-name="' + esc(s.name) + '" data-stu-number="' + s.number + '">' +
                         '<td style="font-family:monospace;color:var(--text-tertiary);">' + s.number + '번</td>' +
                         '<td style="font-weight:700;">' + esc(s.name) + '</td>' +
-                        '<td><span style="background:#ecfdf5;color:#059669;padding:4px 12px;border-radius:8px;font-family:monospace;font-weight:700;font-size:13px;">' + esc(s.code) + '</span></td>' +
                         '<td>' + (plays > 0 ? '<span class="play-badge">' + plays + '회</span>' : '<span style="color:var(--text-tertiary);font-size:12px;">-</span>') + '</td>' +
                         '<td style="text-align:right;"><button class="icon-btn stu-del" data-id="' + s.id + '" title="삭제"><i data-lucide="trash-2" style="width:14px;height:14px;"></i></button></td>' +
                         '</tr>';
