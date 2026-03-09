@@ -448,6 +448,7 @@
         .compact-answer .q-correct { color: #059669; }
         .compact-answer .q-wrong { color: #dc2626; }
         .compact-answer .q-timeout { color: #d97706; }
+        .compact-answer .q-unanswered { color: #94a3b8; }
 
         /* === Quiz History Card (Student Detail) === */
         .history-card {
@@ -1200,7 +1201,7 @@
                 var dateDisplay = formatDateShort(r);
 
                 var answers = r.detailedAnswers || [];
-                var detailHtml = renderCompactAnswers(answers, quiz);
+                var detailHtml = renderCompactAnswers(answers, quiz, Number(r.totalCount || 0));
 
                 return '<tr class="accordion-row" data-aidx="' + idx + '">' +
                     '<td><span class="expand-icon">&#9654;</span></td>' +
@@ -1306,24 +1307,41 @@
             return r.dateStr || '-';
         }
 
-        function renderCompactAnswers(answers, quiz) {
-            if (!answers || !answers.length) return '';
-            return answers.map(function (a, aIdx) {
-                var qIndex = (typeof a.questionIndex === 'number') ? a.questionIndex : aIdx;
-                var qText = (quiz && quiz.problems && quiz.problems[qIndex]) ? quiz.problems[qIndex].question : '';
-                var label = 'Q' + (qIndex + 1) + '. ' + esc(qText);
-                var selected = extractStudentAnswer(a);
-                var correctAns = extractCorrectAnswer(a, quiz, aIdx);
+        function renderCompactAnswers(answers, quiz, totalCount) {
+            var problems = (quiz && quiz.problems) ? quiz.problems : [];
+            var count = problems.length || totalCount || (answers ? answers.length : 0);
+            if (count === 0) return '';
 
-                if (a.isCorrect) {
+            // 답안을 questionIndex 기준으로 맵핑
+            var answerMap = {};
+            (answers || []).forEach(function (a, idx) {
+                var qIndex = (typeof a.questionIndex === 'number') ? a.questionIndex : idx;
+                answerMap[qIndex] = a;
+            });
+
+            var html = '';
+            for (var i = 0; i < count; i++) {
+                var qText = problems[i] ? problems[i].question : '';
+                var label = 'Q' + (i + 1) + '. ' + esc(qText);
+                var a = answerMap[i];
+
+                if (!a) {
+                    // 미제출
+                    var ans = problems[i] ? problems[i].answer : null;
+                    html += '<div class="compact-answer"><span class="q-unanswered">' + label + ' &#9744; 미제출' + (ans ? ' → 정답: ' + esc(ans) : '') + '</span></div>';
+                } else if (a.isCorrect) {
                     var timeStr = (typeof a.elapsedMs === 'number') ? ' (' + (a.elapsedMs / 1000).toFixed(1) + '초)' : '';
-                    return '<div class="compact-answer"><span class="q-correct">' + label + ' &#10003;' + timeStr + '</span></div>';
+                    html += '<div class="compact-answer"><span class="q-correct">' + label + ' &#10003;' + timeStr + '</span></div>';
                 } else if (a.timedOut) {
-                    return '<div class="compact-answer"><span class="q-timeout">' + label + ' &#9200; 시간초과 → 정답: ' + esc(String(correctAns || '-')) + '</span></div>';
+                    var correctAns = extractCorrectAnswer(a, quiz, i);
+                    html += '<div class="compact-answer"><span class="q-timeout">' + label + ' &#9200; 시간초과 → 정답: ' + esc(String(correctAns || '-')) + '</span></div>';
                 } else {
-                    return '<div class="compact-answer"><span class="q-wrong">' + label + ' &#10007; 학생: ' + esc(String(selected || '-')) + ' → 정답: ' + esc(String(correctAns || '-')) + '</span></div>';
+                    var selected = extractStudentAnswer(a);
+                    var correctAns = extractCorrectAnswer(a, quiz, i);
+                    html += '<div class="compact-answer"><span class="q-wrong">' + label + ' &#10007; 학생: ' + esc(String(selected || '-')) + ' → 정답: ' + esc(String(correctAns || '-')) + '</span></div>';
                 }
-            }).join('');
+            }
+            return html;
         }
 
         function bindAccordionRows(container, attr) {
@@ -1648,7 +1666,7 @@
                 }
 
                 var answers = r.detailedAnswers || [];
-                var detailHtml = renderCompactAnswers(answers, quiz);
+                var detailHtml = renderCompactAnswers(answers, quiz, Number(r.totalCount || 0));
 
                 return '<div class="history-card">' +
                     '<div class="history-card-header" data-hidx="' + idx + '">' +
