@@ -277,6 +277,24 @@
     // ═══════════════════════════════════════
 
     /**
+     * detailedAnswers 각 항목을 공통 구조로 정규화
+     * @private
+     */
+    function _normalizeDetailedAnswers(answers) {
+        if (!answers || !answers.length) return [];
+        return answers.map(function (a, idx) {
+            return {
+                questionIndex: (typeof a.questionIndex === 'number') ? a.questionIndex : idx,
+                selectedAnswer: a.selectedAnswer || a.selected || null,
+                correctAnswer: a.correctAnswer || a.answerKey || a.answer || null,
+                isCorrect: !!a.isCorrect,
+                timedOut: !!a.timedOut,
+                elapsedMs: (typeof a.elapsedMs === 'number') ? a.elapsedMs : null
+            };
+        });
+    }
+
+    /**
      * 게임 결과 저장 (학생이 호출 - 인증 불필요)
      * @param {Object} resultData
      * @returns {Promise<string>}
@@ -295,7 +313,13 @@
             score: resultData.score || 0,
             correctCount: resultData.correctCount || 0,
             totalCount: resultData.totalCount || 0,
-            detailedAnswers: resultData.detailedAnswers || [],
+            detailedAnswers: _normalizeDetailedAnswers(resultData.detailedAnswers),
+            // 러너/확장 게임용 선택 필드 (하위 호환 유지)
+            distance: Number(resultData.distance) || 0,
+            survivalTime: Number(resultData.survivalTime) || 0,
+            accuracy: Number(resultData.accuracy) || 0,
+            quizCorrect: Number(resultData.quizCorrect) || (resultData.correctCount || 0),
+            quizWrong: Number(resultData.quizWrong) || Math.max(0, (resultData.totalCount || 0) - (resultData.correctCount || 0)),
             dateStr: EDUMOLE.formatDateStr(),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -306,7 +330,7 @@
 
     /**
      * 결과 조회 (교사용 - 복합 필터 지원)
-     * @param {Object} [filters] - { sessionId, classId, setId, studentCode, dateFrom, dateTo }
+     * @param {Object} [filters] - { sessionId, classId, setId, gameType, studentCode, dateFrom, dateTo }
      * @returns {Promise<Array>}
      */
     async function getResults(filters) {
@@ -318,22 +342,29 @@
             if (filters.sessionId) ref = ref.where('sessionId', '==', filters.sessionId);
             if (filters.classId) ref = ref.where('classId', '==', filters.classId);
             if (filters.setId) ref = ref.where('setId', '==', filters.setId);
+            if (filters.gameType) ref = ref.where('gameType', '==', filters.gameType);
             if (filters.studentCode) ref = ref.where('studentCode', '==', filters.studentCode);
             if (filters.dateFrom) ref = ref.where('dateStr', '>=', filters.dateFrom);
             if (filters.dateTo) ref = ref.where('dateStr', '<=', filters.dateTo);
         }
 
-        // studentCode 필터 시 timestamp 정렬, 나머지는 dateStr 정렬
-        var snapshot;
-        if (filters && filters.studentCode) {
-            snapshot = await ref.orderBy('timestamp', 'desc').get();
-        } else {
-            snapshot = await ref.orderBy('dateStr', 'desc').get();
-        }
-
-        return snapshot.docs.map(function (doc) {
+        // 복합 인덱스 의존도를 낮추기 위해 서버 orderBy 없이 조회 후 클라이언트 정렬
+        var snapshot = await ref.get();
+        var rows = snapshot.docs.map(function (doc) {
             return Object.assign({ id: doc.id }, doc.data());
         });
+
+        rows.sort(function (a, b) {
+            var ta = a && a.timestamp && a.timestamp.seconds ? a.timestamp.seconds : 0;
+            var tb = b && b.timestamp && b.timestamp.seconds ? b.timestamp.seconds : 0;
+            if (tb !== ta) return tb - ta;
+
+            var da = a && a.dateStr ? String(a.dateStr) : '';
+            var dbs = b && b.dateStr ? String(b.dateStr) : '';
+            return dbs.localeCompare(da);
+        });
+
+        return rows;
     }
 
     // ═══════════════════════════════════════
@@ -413,24 +444,48 @@
     }
 
     /**
-     * 학생 추가
+     * 학생 추가 (중복 방지: 같은 classId + number는 upsert)
      * @param {Object} data - { name, number, classId, code }
      * @returns {Promise<string>}
      */
     async function addStudent(data) {
         var uid = _requireTeacherUid();
+        var classId = data.classId || '';
+        var number = Number(data.number) || 0;
         var studentData = {
             name: data.name || '',
-            number: Number(data.number) || 0,
-            classId: data.classId || '',
+            number: number,
+            classId: classId,
             code: data.code || '',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
-        var docRef = await EDUMOLE.getTeacherCollection(db, uid, TCOLS.STUDENTS).add(studentData);
+
+        var studentsRef = EDUMOLE.getTeacherCollection(db, uid, TCOLS.STUDENTS);
+
+        // 동일 반+번호 학생이 이미 있으면 신규 생성 대신 업데이트
+        if (classId && number > 0) {
+            var existing = await studentsRef
+                .where('classId', '==', classId)
+                .where('number', '==', number)
+                .limit(1)
+                .get();
+
+            if (!existing.empty) {
+                var existingDoc = existing.docs[0];
+                await studentsRef.doc(existingDoc.id).update({
+                    name: studentData.name,
+                    code: studentData.code
+                });
+                await _updateStudentCount(uid, classId);
+                return existingDoc.id;
+            }
+        }
+
+        var docRef = await studentsRef.add(studentData);
 
         // 학급의 studentCount 업데이트
-        if (data.classId) {
-            await _updateStudentCount(uid, data.classId);
+        if (classId) {
+            await _updateStudentCount(uid, classId);
         }
 
         return docRef.id;

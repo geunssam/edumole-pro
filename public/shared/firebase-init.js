@@ -18,7 +18,8 @@
         ? firebase.app()
         : firebase.initializeApp(window.firebaseConfig);
 
-    var firebaseAuth = firebase.auth();
+    // auth SDK가 누락된 페이지에서도 초기화가 죽지 않도록 방어
+    var firebaseAuth = (typeof firebase.auth === 'function') ? firebase.auth() : null;
     var firebaseDB = firebase.firestore();
 
     // 전역 변수로 노출 (각 게임에서 바로 사용)

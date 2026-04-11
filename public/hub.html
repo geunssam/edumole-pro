@@ -524,8 +524,7 @@
                         <div class="game-type-icon"><i data-lucide="target"></i></div>
                         <div class="game-type-name">두더지 잡기</div>
                     </div>
-                    <div class="glass-card game-type-card disabled" data-type="runner">
-                        <span class="badge-soon">준비중</span>
+                    <div class="glass-card game-type-card" data-type="runner">
                         <div class="game-type-icon"><i data-lucide="zap"></i></div>
                         <div class="game-type-name">퀴즈 러너</div>
                     </div>
@@ -628,10 +627,13 @@
         var $$ = function (sel) { return document.querySelectorAll(sel); };
 
         // ─── Init ───
-        function init() {
+        async function init() {
             lucide.createIcons();
             setupPinInputs();
             bindEvents();
+
+            // 인증 상태가 완전히 복원될 때까지 대기
+            await EduAuth.onAuthReady;
 
             // URL 파라미터로 PIN 자동 입력
             var urlParams = new URLSearchParams(window.location.search);
@@ -831,8 +833,16 @@
                     console.error('교사 데이터 로드 실패:', err);
                     UIKit.showToast('데이터를 불러올 수 없습니다', { type: 'error' });
                 }
+            } else {
+                // 인증 손실 시 → 교사/로비 뷰에서 Landing으로 복귀
+                if (state.currentView === 'teacher' || state.currentView === 'lobby') {
+                    resetTeacherState();
+                    state.teacherProfile = null;
+                    showView('landing');
+                    clearPinInputs();
+                    UIKit.showToast('로그인이 만료되었습니다. 다시 로그인해주세요.', { type: 'error' });
+                }
             }
-            // 비로그인/익명 → Landing 유지
         }
 
         // ─── Load Teacher Data ───
@@ -945,6 +955,18 @@
             btn.disabled = true;
             btn.textContent = '세션 생성 중...';
 
+            // 인증 상태 확인 — 만료 시 재로그인 유도
+            if (!EduAuth.isTeacher()) {
+                btn.disabled = false;
+                btn.textContent = '세션 시작';
+                UIKit.showToast('로그인이 만료되었습니다. 다시 로그인해주세요.', { type: 'error' });
+                resetTeacherState();
+                state.teacherProfile = null;
+                showView('landing');
+                clearPinInputs();
+                return;
+            }
+
             try {
                 var pin = await QuizBridge.generateUniquePin();
                 var sessionId = await QuizBridge.createSession({
@@ -968,7 +990,7 @@
                 var qrContainer = $('#lobby-qr');
                 qrContainer.innerHTML = '';
                 new QRCode(qrContainer, {
-                    text: location.origin + '/?pin=' + pin,
+                    text: location.origin + '/hub?pin=' + pin,
                     width: 160,
                     height: 160,
                     colorDark: '#000000',
@@ -980,7 +1002,7 @@
                 UIKit.showToast('세션이 생성되었습니다!', { type: 'success' });
             } catch (err) {
                 console.error('세션 생성 실패:', err);
-                UIKit.showToast('세션 생성에 실패했습니다', { type: 'error' });
+                UIKit.showToast('세션 생성 실패: ' + (err && err.message ? err.message : '알 수 없는 오류'), { type: 'error' });
             } finally {
                 btn.disabled = false;
                 btn.textContent = '세션 시작';
@@ -1011,6 +1033,17 @@
         // ─── End Session ───
         async function handleEndSession() {
             if (!state.createdSession) return;
+
+            // 인증 확인 — 만료 시 세션 정리만 하고 Landing으로
+            if (!EduAuth.isTeacher()) {
+                resetTeacherState();
+                state.teacherProfile = null;
+                showView('landing');
+                clearPinInputs();
+                UIKit.showToast('로그인이 만료되었습니다. 다시 로그인해주세요.', { type: 'error' });
+                return;
+            }
+
             try {
                 await QuizBridge.endSession(state.createdSession);
                 UIKit.showToast('세션이 종료되었습니다', { type: 'info' });

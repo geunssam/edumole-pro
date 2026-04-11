@@ -14,6 +14,7 @@
 
     <!-- Firebase Compat SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 
     <!-- Lucide Icons -->
@@ -191,7 +192,13 @@
                 setMoles(prev => { const next = [...prev]; next[idx] = { ...next[idx], active: false }; return next; });
                 setFb(mole.isCorrect);
                 setTimeout(() => setFb(null), 800);
-                const newAns = { questionIndex: currentProbIdx, isCorrect: mole.isCorrect };
+                const p = problems[currentProbIdx];
+                const newAns = {
+                    questionIndex: currentProbIdx,
+                    selectedAnswer: mole.content,
+                    correctAnswer: p ? p.answer : '',
+                    isCorrect: mole.isCorrect
+                };
                 const nextAnsLog = [...ansLog, newAns];
                 if (mole.isCorrect) {
                     const nextScore = score + Math.ceil(100 / problems.length);
@@ -278,18 +285,25 @@
                 async function init() {
                     // 1. URL 파라미터 파싱
                     const params = EDUMOLE.getUrlParams();
-                    const sessionId = params.session;
-                    const student = params.student;
-
-                    if (!sessionId || !student) {
-                        setErrorMsg('잘못된 접근입니다.\n세션 ID와 학생 이름이 필요합니다.');
-                        setState('error');
-                        return;
-                    }
+                    let sessionId = params.session;
+                    const pin = params.pin;
+                    const student = params.student || '학생';
 
                     setStudentName(decodeURIComponent(student));
 
                     try {
+                        // session 파라미터가 없으면 pin으로 세션 조회 허용
+                        if (!sessionId && pin) {
+                            const byPin = await QuizBridge.findSessionByPin(pin);
+                            if (byPin && byPin.id) sessionId = byPin.id;
+                        }
+
+                        if (!sessionId) {
+                            setErrorMsg('잘못된 접근입니다.\n세션 정보가 없습니다.');
+                            setState('error');
+                            return;
+                        }
+
                         // 2. 세션 로드
                         const sess = await QuizBridge.getSessionById(sessionId);
                         if (!sess) {

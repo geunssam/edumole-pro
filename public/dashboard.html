@@ -266,8 +266,6 @@
             padding: var(--space-2xl);
             width: 100%;
             max-width: 800px;
-            max-height: 80vh;
-            overflow-y: auto;
         }
         .sheet-table {
             width: 100%;
@@ -771,17 +769,30 @@
         </div>
     </div>
 
-    <!-- ===== 모달: 스프레드시트 일괄 등록 ===== -->
+    <!-- ===== 모달: 문항 일괄 등록 ===== -->
+    <input type="file" id="csv-file-input" accept=".csv" style="display:none">
     <div class="sheet-modal-bg" id="modal-sheet">
-        <div class="sheet-modal">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--space-xl);">
-                <div>
-                    <h3 style="font-weight:800;font-size:var(--font-size-xl);">스프레드시트 일괄 등록</h3>
-                    <p class="text-caption" style="margin-top:4px;">질문, 정답, 오답1, 오답2, 오답3 범위를 복사 후 첫 칸에 붙여넣기</p>
+        <div class="sheet-modal" style="display:flex;flex-direction:column;max-height:90vh;">
+            <!-- 헤더 (고정) -->
+            <div style="flex-shrink:0;margin-bottom:var(--space-lg);">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div>
+                        <h3 style="font-weight:800;font-size:var(--font-size-xl);">문항 일괄 등록</h3>
+                        <p class="text-caption" style="margin-top:4px;">직접 입력하거나, CSV 파일로 한 번에 가져오세요.</p>
+                    </div>
                 </div>
-                <button class="btn btn-primary btn-sm" id="btn-sheet-apply">문항 추가</button>
+                <div style="display:flex;gap:var(--space-sm);margin-top:var(--space-md);flex-wrap:wrap;">
+                    <button class="btn btn-sm" id="btn-csv-template" style="background:#ecfdf5;color:#059669;border:1px solid #6ee7b7;font-weight:700;">
+                        <i data-lucide="download" style="width:13px;height:13px;"></i> CSV 템플릿 다운로드
+                    </button>
+                    <button class="btn btn-sm" id="btn-csv-upload" style="background:#eff6ff;color:#2563eb;border:1px solid #93c5fd;font-weight:700;">
+                        <i data-lucide="upload" style="width:13px;height:13px;"></i> CSV 파일 업로드
+                    </button>
+                    <span class="text-caption" id="csv-filename" style="align-self:center;"></span>
+                </div>
             </div>
-            <div style="overflow-x:auto;">
+            <!-- 그리드 (스크롤 영역) -->
+            <div style="overflow:auto;flex:1;">
                 <table class="sheet-table" id="sheet-grid">
                     <thead>
                         <tr><th style="width:32px;">NO</th><th>질문</th><th style="color:#059669;">정답</th><th style="color:#dc2626;">오답1</th><th style="color:#dc2626;">오답2</th><th style="color:#dc2626;">오답3</th><th style="width:32px;"></th></tr>
@@ -789,11 +800,16 @@
                     <tbody id="sheet-body"></tbody>
                 </table>
             </div>
-            <div style="display:flex;gap:var(--space-md);margin-top:var(--space-lg);">
-                <button class="btn btn-secondary btn-sm" id="btn-sheet-add-row" style="flex:1;">
+            <!-- 푸터 (항상 표시) -->
+            <div style="flex-shrink:0;display:flex;gap:var(--space-md);margin-top:var(--space-lg);align-items:center;padding-top:var(--space-md);border-top:1px solid #f1f5f9;">
+                <button class="btn btn-secondary btn-sm" id="btn-sheet-add-row">
                     <i data-lucide="plus" style="width:14px;height:14px;"></i> 행 추가
                 </button>
+                <div style="flex:1;"></div>
                 <button class="btn btn-secondary btn-sm" id="btn-sheet-close">닫기</button>
+                <button class="btn btn-primary btn-sm" id="btn-sheet-apply" style="gap:4px;">
+                    <i data-lucide="check" style="width:14px;height:14px;"></i> 문항 반영
+                </button>
             </div>
         </div>
     </div>
@@ -807,8 +823,13 @@
         var editingQuiz = null; // { id, title, problems, moleCount, timeLimit } or null for new
         var selectedClassForRoster = null;
 
-        // Spreadsheet grid data
-        var gridData = [['', '', '', '', '']];
+        // Spreadsheet grid data (default 10 rows)
+        function makeEmptyGrid(n) {
+            var g = [];
+            for (var i = 0; i < n; i++) g.push(['', '', '', '', '']);
+            return g;
+        }
+        var gridData = makeEmptyGrid(10);
 
         // Quiz detail state
         var currentQuizDetail = null;
@@ -929,6 +950,16 @@
                 renderSheetGrid();
             });
             document.getElementById('btn-sheet-close').addEventListener('click', function () { hideModal('modal-sheet'); });
+
+            // CSV 다운로드 / 업로드
+            document.getElementById('btn-csv-template').addEventListener('click', downloadCsvTemplate);
+            document.getElementById('btn-csv-upload').addEventListener('click', function () {
+                document.getElementById('csv-file-input').value = '';
+                document.getElementById('csv-file-input').click();
+            });
+            document.getElementById('csv-file-input').addEventListener('change', function () {
+                if (this.files && this.files[0]) handleCsvFile(this.files[0]);
+            });
 
             // 결과 상세 모달
             document.getElementById('btn-result-detail-close').addEventListener('click', function () { hideModal('modal-result-detail'); });
@@ -1359,9 +1390,90 @@
         // ─── 스프레드시트 일괄 등록 ───
 
         function openSheetModal() {
-            gridData = [['', '', '', '', '']];
+            gridData = makeEmptyGrid(10);
+            document.getElementById('csv-filename').textContent = '';
             renderSheetGrid();
             showModal('modal-sheet');
+        }
+
+        // ─── CSV 다운로드 ───
+
+        function downloadCsvTemplate() {
+            var header = '질문,정답,오답1,오답2,오답3';
+            var rows = [
+                '대한민국의 수도는?,서울,부산,대구,인천',
+                '태양계에서 가장 큰 행성은?,목성,토성,화성,금성'
+            ];
+            var bom = '\uFEFF'; // BOM for Excel UTF-8
+            var csv = bom + [header].concat(rows).join('\n');
+            var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = 'quiz_template.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ─── CSV 업로드 ───
+
+        function handleCsvFile(file) {
+            document.getElementById('csv-filename').textContent = file.name;
+            var reader = new FileReader();
+            reader.onload = function (e) {
+                var text = e.target.result;
+                // BOM 제거
+                if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+                var lines = text.split(/\r?\n/).filter(function (l) { return l.trim(); });
+                // 첫 줄이 헤더인지 확인 (질문 or question)
+                var startIdx = 0;
+                if (lines.length > 0) {
+                    var first = lines[0].toLowerCase();
+                    if (first.indexOf('질문') !== -1 || first.indexOf('question') !== -1) startIdx = 1;
+                }
+                var parsed = lines.slice(startIdx).map(function (line) {
+                    // 따옴표 처리된 CSV 파싱
+                    var cols = parseCsvLine(line);
+                    return [
+                        (cols[0] || '').trim(),
+                        (cols[1] || '').trim(),
+                        (cols[2] || '').trim(),
+                        (cols[3] || '').trim(),
+                        (cols[4] || '').trim()
+                    ];
+                }).filter(function (r) { return r[0] && r[1]; });
+
+                if (parsed.length === 0) {
+                    UIKit.showToast('파싱된 문항이 없습니다. CSV 형식을 확인해주세요.', { type: 'error' });
+                    return;
+                }
+                // 기존 그리드 커서 뒤에 덧붙이거나 교체
+                var existing = gridData.filter(function (r) { return r[0] || r[1]; });
+                gridData = existing.concat(parsed);
+                if (gridData.length === 0) gridData = makeEmptyGrid(1);
+                renderSheetGrid();
+                UIKit.showToast(parsed.length + '개 문항을 불러왔습니다.', { type: 'success' });
+            };
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        function parseCsvLine(line) {
+            var result = [];
+            var cur = '';
+            var inQ = false;
+            for (var i = 0; i < line.length; i++) {
+                var ch = line[i];
+                if (ch === '"') {
+                    if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+                    else inQ = !inQ;
+                } else if (ch === ',' && !inQ) {
+                    result.push(cur); cur = '';
+                } else {
+                    cur += ch;
+                }
+            }
+            result.push(cur);
+            return result;
         }
 
         function renderSheetGrid() {

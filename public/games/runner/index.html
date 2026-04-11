@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+  <title>끝없는 달리기 — EduMole Pro</title>
+
+  <link rel="stylesheet" href="/shared/common.css" />
+  <link rel="stylesheet" href="./runner.css" />
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="/firebase-config.js"></script>
+  <script src="/shared/firebase-init.js"></script>
+  <script src="/shared/constants.js"></script>
+  <script src="/shared/quiz-bridge.js"></script>
+</head>
+<body>
+  <main class="runner-shell">
+    <section class="runner-card">
+      <header class="runner-hud" id="runnerHUD"></header>
+
+      <section class="runner-stage-wrap">
+        <div class="runner-stage" id="runnerStage">
+          <div class="bg-layer bg-far"></div>
+          <div class="bg-layer bg-near"></div>
+          <div class="ground" id="ground"></div>
+          <div class="player" id="player" aria-label="player"></div>
+          <div class="obstacle-layer" id="obstacleLayer"></div>
+          <div class="overlay-message" id="overlayMessage"></div>
+        </div>
+      </section>
+
+      <footer class="runner-controls">
+        <button id="btnStart" class="btn-primary">시작</button>
+        <button id="btnJump" class="btn-soft">점프 (↑/Space)</button>
+        <button id="btnSlide" class="btn-soft">슬라이드 (↓/S)</button>
+      </footer>
+
+      <section class="runner-help">
+        <p id="statusLine">세션을 불러오는 중...</p>
+      </section>
+    </section>
+  </main>
+
+  <div class="quiz-modal hidden" id="quizModal" role="dialog" aria-modal="true" aria-labelledby="quizQuestionTitle">
+    <div class="quiz-panel">
+      <div class="quiz-head">
+        <div class="quiz-label">QUIZ TIME</div>
+        <div class="quiz-timer" id="quizTimer">0</div>
+      </div>
+      <h2 class="quiz-question" id="quizQuestionTitle"></h2>
+      <div class="quiz-grid" id="quizChoices"></div>
+      <p class="quiz-sub">정답을 고르면 게임이 다시 진행됩니다.</p>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
