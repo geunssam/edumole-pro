@@ -45,10 +45,25 @@
         RUNNER: 'runner'
     };
 
-    // 게임별 기본 설정값
+    // 게임별 기본 설정값 (v3: 통일 스키마)
+    // 공통: totalTimeSec, perQuestionTimeSec, comboEnabled, comboBonusPerLevel
+    // 게임별: moleCount(두더지), lives/quizIntervalSec(러너)
     var GAME_DEFAULTS = {
-        mole: { moleCount: 6, timeLimit: 30 },
-        runner: { quizInterval: 500, difficulty: 'normal', lives: 3 }
+        mole: {
+            totalTimeSec: 60,
+            perQuestionTimeSec: 8,
+            comboEnabled: true,
+            comboBonusPerLevel: 10,
+            moleCount: 6
+        },
+        runner: {
+            totalTimeSec: 180,
+            perQuestionTimeSec: 7,
+            comboEnabled: true,
+            comboBonusPerLevel: 10,
+            lives: 3,
+            quizIntervalSec: 20
+        }
     };
 
     // 기존 경로 (마이그레이션용)

@@ -15,9 +15,11 @@ export class RunnerGame {
     this.score = 0;
     this.distance = 0;
     this.survival = 0;
-    this.lives = RUNNER_DEFAULTS.lives;
+    this.lives = this.settings.lives;
     this.correct = 0;
     this.wrong = 0;
+    this.combo = 0;
+    this.maxCombo = 0;
     this.details = [];
     this.quizIndex = -1;
     this.quizCooldown = this.settings.quizIntervalSec;
@@ -41,10 +43,17 @@ export class RunnerGame {
   }
 
   _resolveSettings() {
-    const s = this.session.settings || {};
+    // QuizBridge.resolveSettings를 사용해 통일된 스키마로 해석 (구버전 폴백 포함)
+    const merged = (window.QuizBridge && window.QuizBridge.resolveSettings)
+      ? window.QuizBridge.resolveSettings(this.session, 'runner')
+      : (this.session.settings || {});
     return {
-      quizIntervalSec: Math.max(8, Number(s.quizIntervalSec) || RUNNER_DEFAULTS.quizIntervalSec),
-      quizTimeLimitSec: Math.max(3, Number(s.quizTimeLimitSec) || RUNNER_DEFAULTS.quizTimeLimitSec)
+      quizIntervalSec: Math.max(8, Number(merged.quizIntervalSec) || RUNNER_DEFAULTS.quizIntervalSec),
+      quizTimeLimitSec: Math.max(3, Number(merged.perQuestionTimeSec) || RUNNER_DEFAULTS.quizTimeLimitSec),
+      totalTimeSec: Number(merged.totalTimeSec) > 0 ? Number(merged.totalTimeSec) : RUNNER_DEFAULTS.totalTimeSec,
+      comboEnabled: merged.comboEnabled !== false,
+      comboBonusPerLevel: Number(merged.comboBonusPerLevel) || RUNNER_DEFAULTS.comboBonusPerLevel,
+      lives: Number(merged.lives) > 0 ? Number(merged.lives) : RUNNER_DEFAULTS.lives
     };
   }
 
@@ -96,6 +105,13 @@ export class RunnerGame {
       this.score += RUNNER_DEFAULTS.scorePerSec * dt;
       this.quizCooldown -= dt;
 
+      // 전체 시간 초과 시 종료 (시간 or 목숨 중 먼저 도달하는 쪽)
+      if (this.survival >= this.settings.totalTimeSec) {
+        this._flash('시간 종료!');
+        await this.finish();
+        return;
+      }
+
       this.player.update(dt);
       this.obstacles.update(dt, this.speed);
 
@@ -140,12 +156,16 @@ export class RunnerGame {
 
     if (res.isCorrect) {
       this.correct += 1;
-      this.score += 120;
+      this.combo += 1;
+      if (this.combo > this.maxCombo) this.maxCombo = this.combo;
+      const comboBonus = this.settings.comboEnabled ? this.combo * this.settings.comboBonusPerLevel : 0;
+      this.score += 120 + comboBonus;
       this.speed = Math.min(RUNNER_DEFAULTS.maxSpeed, this.speed * 1.12);
       this.player.cheer();
-      this._flash('정답! 속도 상승');
+      this._flash(this.combo >= 2 ? `정답! 콤보 ×${this.combo}` : '정답! 속도 상승');
     } else {
       this.wrong += 1;
+      this.combo = 0;
       this.speed = Math.max(180, this.speed * 0.9);
       this._flash(res.timedOut ? '시간 초과!' : '오답! 감속');
     }
@@ -164,13 +184,17 @@ export class RunnerGame {
   _renderHUD() {
     const totalQuiz = this.correct + this.wrong;
     const acc = totalQuiz ? Math.round((this.correct / totalQuiz) * 100) : 0;
+    const timeLeft = Math.max(0, this.settings.totalTimeSec - this.survival);
     this.hud.set({
       score: Math.floor(this.score),
       distance: this.distance.toFixed(1),
       survival: this.survival.toFixed(1),
       lives: this.lives,
       quiz: `${this.correct}/${totalQuiz}`,
-      accuracy: `${acc}%`
+      accuracy: `${acc}%`,
+      combo: this.combo,
+      timeLeft: timeLeft.toFixed(1),
+      totalTimeSec: this.settings.totalTimeSec
     });
   }
 
@@ -201,7 +225,8 @@ export class RunnerGame {
         survivalTime: Number(this.survival.toFixed(2)),
         accuracy: Number(accuracy.toFixed(4)),
         quizCorrect: this.correct,
-        quizWrong: this.wrong
+        quizWrong: this.wrong,
+        maxCombo: this.maxCombo
       });
       this.dom.statusLine.textContent += ' · 결과 저장 완료';
     } catch (e) {

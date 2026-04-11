@@ -57,16 +57,22 @@
 
     /**
      * 퀴즈 세트 생성
-     * @param {Object} data - { title, problems, timeLimit }
+     * @param {Object} data - { title, problems, defaultGameType, settings, timeLimit, moleCount }
      * @returns {Promise<string>} 생성된 문서 ID
      */
     async function createQuizSet(data) {
         var uid = _requireTeacherUid();
+        var defaultGameType = data.defaultGameType || EDUMOLE.GAME_TYPES.MOLE;
+        var settings = _normalizeSettings(data.settings, defaultGameType);
         var setData = {
             title: data.title || '',
             problems: data.problems || [],
             problemCount: (data.problems || []).length,
-            timeLimit: data.timeLimit || 30,
+            defaultGameType: defaultGameType,
+            settings: settings,
+            // 하위 호환 top-level 미러링
+            timeLimit: settings.totalTimeSec,
+            moleCount: settings.moleCount,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -77,7 +83,7 @@
     /**
      * 퀴즈 세트 수정
      * @param {string} setId
-     * @param {Object} data - 수정할 필드
+     * @param {Object} data - 수정할 필드 (defaultGameType, settings 지원)
      * @returns {Promise<void>}
      */
     async function updateQuizSet(setId, data) {
@@ -88,7 +94,72 @@
         if (data.problems) {
             updateData.problemCount = data.problems.length;
         }
+        // settings가 전달되면 정규화하고 top-level 미러링 동기화
+        if (data.settings) {
+            var gameType = data.defaultGameType || updateData.defaultGameType || EDUMOLE.GAME_TYPES.MOLE;
+            var normalized = _normalizeSettings(data.settings, gameType);
+            updateData.settings = normalized;
+            updateData.timeLimit = normalized.totalTimeSec;
+            updateData.moleCount = normalized.moleCount;
+        }
         await EDUMOLE.getTeacherCollection(db, uid, TCOLS.QUIZ_SETS).doc(setId).update(updateData);
+    }
+
+    // ─── 내부 유틸: settings 정규화/합성 ───
+
+    /**
+     * settings 입력을 게임 타입의 DEFAULT와 병합해 완전한 settings 객체를 반환
+     * 구버전 키(timeLimit, quizTimeLimitSec) 폴백 포함
+     * @private
+     */
+    function _normalizeSettings(input, gameType) {
+        var gt = gameType || EDUMOLE.GAME_TYPES.MOLE;
+        var defaults = EDUMOLE.GAME_DEFAULTS[gt] || EDUMOLE.GAME_DEFAULTS.mole;
+        var src = input || {};
+
+        // 구버전 키 폴백: totalTimeSec ← timeLimit, perQuestionTimeSec ← quizTimeLimitSec
+        var totalTimeSec = Number(src.totalTimeSec);
+        if (!(totalTimeSec > 0) && Number(src.timeLimit) > 0) totalTimeSec = Number(src.timeLimit);
+        if (!(totalTimeSec > 0)) totalTimeSec = defaults.totalTimeSec;
+
+        var perQTime = Number(src.perQuestionTimeSec);
+        if (!(perQTime > 0) && Number(src.quizTimeLimitSec) > 0) perQTime = Number(src.quizTimeLimitSec);
+        if (!(perQTime > 0)) perQTime = defaults.perQuestionTimeSec;
+
+        var merged = {
+            totalTimeSec: totalTimeSec,
+            perQuestionTimeSec: perQTime,
+            comboEnabled: (src.comboEnabled !== undefined) ? !!src.comboEnabled : (defaults.comboEnabled !== false),
+            comboBonusPerLevel: Number(src.comboBonusPerLevel) || defaults.comboBonusPerLevel || 10
+        };
+
+        // 게임별 필드
+        merged.moleCount = Number(src.moleCount) || defaults.moleCount || 6;
+        merged.lives = Number(src.lives) || defaults.lives || 3;
+        merged.quizIntervalSec = Number(src.quizIntervalSec) || defaults.quizIntervalSec || 20;
+
+        return merged;
+    }
+
+    /**
+     * 세션 또는 퀴즈 문서에서 settings를 로드해 완전한 객체 반환.
+     * 게임 엔트리 포인트(mole/runner)가 호출하는 단일 폴백 지점.
+     * @param {Object} sessionOrQuiz - session 문서 또는 quiz set 문서
+     * @param {string} [gameType] - 명시하지 않으면 문서의 gameType/defaultGameType 사용
+     * @returns {Object}
+     */
+    function resolveSettings(sessionOrQuiz, gameType) {
+        var doc = sessionOrQuiz || {};
+        var gt = gameType || doc.gameType || doc.defaultGameType || EDUMOLE.GAME_TYPES.MOLE;
+        // 세션/퀴즈 doc의 settings 객체가 우선. 없으면 doc의 top-level(timeLimit 등)에서 합성
+        var source = doc.settings || {
+            totalTimeSec: doc.timeLimit,
+            moleCount: doc.moleCount,
+            quizIntervalSec: doc.quizIntervalSec,
+            perQuestionTimeSec: doc.quizTimeLimitSec,
+            lives: doc.lives
+        };
+        return _normalizeSettings(source, gt);
     }
 
     /**
@@ -166,10 +237,18 @@
             quizSet = await loadQuizSet(params.quizSetId);
         }
 
+        var gameType = params.gameType || (quizSet && quizSet.defaultGameType) || EDUMOLE.GAME_TYPES.MOLE;
+
+        // settings 우선순위: 호출자 params.settings > 퀴즈 문서 settings > 퀴즈 top-level(구버전) > GAME_DEFAULTS
+        var rawSettings = params.settings
+            || (quizSet && quizSet.settings)
+            || (quizSet ? { totalTimeSec: quizSet.timeLimit, moleCount: quizSet.moleCount } : null);
+        var settings = _normalizeSettings(rawSettings, gameType);
+
         var sessionData = {
             teacherId: uid,
             pin: params.pin,
-            gameType: params.gameType || EDUMOLE.GAME_TYPES.MOLE,
+            gameType: gameType,
             status: EDUMOLE.SESSION_STATUS.WAITING,
             quizSetId: params.quizSetId || '',
             quizSetTitle: params.quizSetTitle || (quizSet ? quizSet.title : ''),
@@ -178,7 +257,7 @@
             className: params.className || '',
             dateStr: EDUMOLE.formatDateStr(),
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            settings: params.settings || EDUMOLE.GAME_DEFAULTS[params.gameType || 'mole'] || {}
+            settings: settings
         };
 
         var docRef = await EDUMOLE.getTopCollection(db, TOP.SESSIONS).add(sessionData);
@@ -320,6 +399,7 @@
             accuracy: Number(resultData.accuracy) || 0,
             quizCorrect: Number(resultData.quizCorrect) || (resultData.correctCount || 0),
             quizWrong: Number(resultData.quizWrong) || Math.max(0, (resultData.totalCount || 0) - (resultData.correctCount || 0)),
+            maxCombo: Number(resultData.maxCombo) || 0,
             dateStr: EDUMOLE.formatDateStr(),
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
         };
@@ -457,6 +537,7 @@
             number: number,
             classId: classId,
             code: data.code || '',
+            gender: data.gender || '',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
 
@@ -474,7 +555,8 @@
                 var existingDoc = existing.docs[0];
                 await studentsRef.doc(existingDoc.id).update({
                     name: studentData.name,
-                    code: studentData.code
+                    code: studentData.code,
+                    gender: studentData.gender
                 });
                 await _updateStudentCount(uid, classId);
                 return existingDoc.id;
@@ -556,6 +638,7 @@
         getNextQuestion: getNextQuestion,
         checkAnswer: checkAnswer,
         getChoices: getChoices,
+        resolveSettings: resolveSettings,
         // 세션
         createSession: createSession,
         findSessionByPin: findSessionByPin,

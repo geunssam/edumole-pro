@@ -886,6 +886,15 @@
                     this.classList.add('selected');
                     var id = this.getAttribute('data-id');
                     state.selectedQuizSet = sets.find(function (s) { return s.id === id; }) || null;
+
+                    // 퀴즈에 바인딩된 defaultGameType을 위저드 기본값으로 프리셋
+                    if (state.selectedQuizSet && state.selectedQuizSet.defaultGameType) {
+                        state.selectedGameType = state.selectedQuizSet.defaultGameType;
+                        $$('.game-type-card').forEach(function (c) { c.classList.remove('selected'); });
+                        var presetCard = $('.game-type-card[data-type="' + state.selectedGameType + '"]');
+                        if (presetCard) presetCard.classList.add('selected');
+                    }
+
                     $('#btn-step1-next').disabled = false;
                 });
             });
@@ -969,13 +978,16 @@
 
             try {
                 var pin = await QuizBridge.generateUniquePin();
+                // 퀴즈 세트의 settings를 세션에 전달 (quiz-bridge가 폴백/병합 처리)
+                var quizSettings = state.selectedQuizSet ? state.selectedQuizSet.settings : null;
                 var sessionId = await QuizBridge.createSession({
                     pin: pin,
                     gameType: state.selectedGameType,
                     quizSetId: state.selectedQuizSet ? state.selectedQuizSet.id : '',
                     quizSetTitle: state.selectedQuizSet ? state.selectedQuizSet.title : '',
                     classId: state.selectedClass ? state.selectedClass.id : '',
-                    className: state.selectedClass ? state.selectedClass.name : ''
+                    className: state.selectedClass ? state.selectedClass.name : '',
+                    settings: quizSettings
                 });
 
                 state.createdSession = sessionId;

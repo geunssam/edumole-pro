@@ -1,0 +1,29 @@
+[build]
+  publish = "public"
+
+# Clean URLs rewrites
+[[redirects]]
+  from = "/dashboard"
+  to = "/dashboard.html"
+  status = 200
+
+[[redirects]]
+  from = "/hub"
+  to = "/hub.html"
+  status = 200
+
+[[redirects]]
+  from = "/mole-legacy"
+  to = "/mole-legacy.html"
+  status = 200
+
+# 기본 접속 시 허브 페이지로 연결 (Firebase의 catch-all 대용)
+[[redirects]]
+  from = "/"
+  to = "/hub.html"
+  status = 301
+
+[[redirects]]
+  from = "/*"
+  to = "/hub.html"
+  status = 404

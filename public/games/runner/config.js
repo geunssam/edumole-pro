@@ -5,6 +5,8 @@ export const RUNNER_DEFAULTS = {
   slideSec: 0.6,
   quizIntervalSec: 20,
   quizTimeLimitSec: 7,
+  totalTimeSec: 180,
+  comboBonusPerLevel: 10,
   obstacleSpawnSec: [1.2, 2.0],
   scorePerSec: 20,
   distancePerSpeed: 0.18,

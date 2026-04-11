@@ -65,7 +65,6 @@
 
         // --- Constants ---
         const EDUMOLE = window.EDUMOLE;
-        const DEFAULTS = EDUMOLE.GAME_DEFAULTS.mole;
 
         // --- Loading View ---
         function LoadingView() {
@@ -132,16 +131,24 @@
         // --- Game Engine (from mole-legacy.html) ---
         function WhackAMoleGame({ session, studentName, onFinish }) {
             const problems = session.problems || [];
-            const moleCount = (session.settings && session.settings.moleCount) || DEFAULTS.moleCount;
-            const timeLimit = (session.settings && session.settings.timeLimit) || DEFAULTS.timeLimit;
+            // 통합 settings 해석 (구버전 호환, quiz-bridge가 폴백 담당)
+            const settings = window.QuizBridge.resolveSettings(session, 'mole');
+            const moleCount = settings.moleCount;
+            const totalTimeSec = settings.totalTimeSec;
+            const perQTimeSec = settings.perQuestionTimeSec;
+            const comboEnabled = settings.comboEnabled !== false;
+            const comboBonus = settings.comboBonusPerLevel || 10;
 
-            const [timeLeft, setTimeLeft] = useState(timeLimit);
+            const [totalTimeLeft, setTotalTimeLeft] = useState(totalTimeSec);
+            const [qTimeLeft, setQTimeLeft] = useState(perQTimeSec);
             const [score, setScore] = useState(0);
+            const [combo, setCombo] = useState(0);
             const [currentProbIdx, setCurrentProbIdx] = useState(0);
             const [moles, setMoles] = useState(Array(6).fill({ active: false, content: '', isCorrect: false }));
             const [ansLog, setAnsLog] = useState([]);
             const [fb, setFb] = useState(null);
             const active = useRef(true);
+            const maxComboRef = useRef(0);
 
             const finish = useCallback(async (s, a) => {
                 if (!active.current) return;
@@ -150,15 +157,54 @@
                     score: s,
                     correctCount: a.filter(x => x.isCorrect).length,
                     totalCount: problems.length,
-                    detailedAnswers: a
+                    detailedAnswers: a,
+                    maxCombo: maxComboRef.current
                 });
             }, [problems.length, onFinish]);
 
+            // 전체 시간 카운트다운
             useEffect(() => {
-                if (timeLeft <= 0) { finish(score, ansLog); return; }
-                const t = setInterval(() => setTimeLeft(p => p - 1), 1000);
+                if (totalTimeLeft <= 0) { finish(score, ansLog); return; }
+                const t = setInterval(() => setTotalTimeLeft(p => p - 1), 1000);
                 return () => clearInterval(t);
-            }, [timeLeft, finish, score, ansLog]);
+            }, [totalTimeLeft, finish, score, ansLog]);
+
+            // 문항당 시간 카운트다운 (0이 되면 오답 처리 + 다음 문제)
+            useEffect(() => {
+                if (!active.current) return;
+                if (qTimeLeft <= 0) {
+                    // 타임아웃: 오답 로그, 콤보 리셋, 다음 문제
+                    const p = problems[currentProbIdx];
+                    const newAns = {
+                        questionIndex: currentProbIdx,
+                        selectedAnswer: null,
+                        correctAnswer: p ? p.answer : '',
+                        isCorrect: false,
+                        timedOut: true
+                    };
+                    const nextLog = [...ansLog, newAns];
+                    setCombo(0);
+                    setFb(false);
+                    setTimeout(() => setFb(null), 600);
+                    if (currentProbIdx < problems.length - 1) {
+                        setAnsLog(nextLog);
+                        setCurrentProbIdx(v => v + 1);
+                        setQTimeLeft(perQTimeSec);
+                    } else {
+                        finish(score, nextLog);
+                    }
+                    return;
+                }
+                const t = setInterval(() => setQTimeLeft(p => p - 1), 1000);
+                return () => clearInterval(t);
+            }, [qTimeLeft, currentProbIdx, problems, ansLog, score, finish, perQTimeSec]);
+
+            // 문제 전환 시 문항 타이머 리셋 (currentProbIdx가 바뀌면 새 문제)
+            useEffect(() => {
+                if (active.current && currentProbIdx > 0) {
+                    setQTimeLeft(perQTimeSec);
+                }
+            }, [currentProbIdx, perQTimeSec]);
 
             useEffect(() => {
                 if (!active.current || problems.length === 0) return;
@@ -201,7 +247,12 @@
                 };
                 const nextAnsLog = [...ansLog, newAns];
                 if (mole.isCorrect) {
-                    const nextScore = score + Math.ceil(100 / problems.length);
+                    const base = Math.ceil(100 / problems.length);
+                    const bonus = comboEnabled ? combo * comboBonus : 0;
+                    const nextScore = score + base + bonus;
+                    const nextCombo = combo + 1;
+                    if (nextCombo > maxComboRef.current) maxComboRef.current = nextCombo;
+                    setCombo(nextCombo);
                     if (currentProbIdx < problems.length - 1) {
                         setScore(nextScore);
                         setAnsLog(nextAnsLog);
@@ -212,6 +263,7 @@
                 } else {
                     setScore(s => Math.max(0, s - 5));
                     setAnsLog(nextAnsLog);
+                    setCombo(0);
                 }
             };
 
@@ -229,16 +281,25 @@
                         </div>
                     )}
                     <div className="p-4 md:p-8 flex justify-between items-start">
-                        <div className="bg-white/95 p-5 rounded-[2rem] shadow-2xl flex gap-8">
+                        <div className="bg-white/95 p-5 rounded-[2rem] shadow-2xl flex gap-6 items-center">
                             <div className="text-center text-slate-800">
                                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">SCORE</div>
                                 <div className="text-3xl font-black text-emerald-600 italic">{score}</div>
                             </div>
-                            <div className="w-[1px] bg-slate-200"></div>
+                            <div className="w-[1px] bg-slate-200 self-stretch"></div>
                             <div className="text-center text-slate-800">
                                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">TIME</div>
-                                <div className={`text-3xl font-black ${timeLeft < 10 ? 'text-red-500' : ''}`}>{timeLeft}s</div>
+                                <div className={`text-3xl font-black ${totalTimeLeft < 10 ? 'text-red-500' : ''}`}>{totalTimeLeft}s</div>
                             </div>
+                            {combo >= 2 && (
+                                <>
+                                    <div className="w-[1px] bg-slate-200 self-stretch"></div>
+                                    <div className="text-center">
+                                        <div className="text-[10px] font-black text-amber-500 uppercase tracking-widest mb-1">COMBO</div>
+                                        <div className="text-3xl font-black text-amber-500 italic animate-pulse">×{combo}</div>
+                                    </div>
+                                </>
+                            )}
                         </div>
                         <div className="bg-white p-5 rounded-[2rem] shadow-2xl font-black text-orange-500 text-2xl italic tracking-tight">
                             Q {currentProbIdx + 1}/{problems.length}
@@ -247,6 +308,14 @@
                     <div className="max-w-xl mx-auto mt-4 px-6 relative z-10 text-center">
                         <div className="bg-white p-8 rounded-[2.5rem] shadow-2xl border-b-8 border-slate-200 relative overflow-hidden text-slate-800">
                             <h2 className="text-2xl md:text-3xl font-black break-keep leading-tight">{problems[currentProbIdx].question}</h2>
+                            {/* 문항당 시간 프로그레스 바 */}
+                            <div className="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full transition-all duration-1000 ease-linear ${qTimeLeft <= 3 ? 'bg-red-500' : 'bg-sky-500'}`}
+                                    style={{ width: `${Math.max(0, (qTimeLeft / perQTimeSec) * 100)}%` }}
+                                ></div>
+                            </div>
+                            <div className="mt-1 text-xs font-black text-slate-400">문항당 {qTimeLeft}s</div>
                         </div>
                     </div>
                     <div className={`max-w-3xl mx-auto mt-24 grid gap-y-24 gap-x-8 px-6 ${moleCount <= 3 ? 'grid-cols-2' : 'grid-cols-3'}`}>
@@ -343,7 +412,8 @@
                     score: gameResult.score,
                     correctCount: gameResult.correctCount,
                     totalCount: gameResult.totalCount,
-                    detailedAnswers: gameResult.detailedAnswers
+                    detailedAnswers: gameResult.detailedAnswers,
+                    maxCombo: gameResult.maxCombo || 0
                 };
                 setResult(finalResult);
                 setState('result');
@@ -362,7 +432,8 @@
                         score: gameResult.score,
                         correctCount: gameResult.correctCount,
                         totalCount: gameResult.totalCount,
-                        detailedAnswers: gameResult.detailedAnswers
+                        detailedAnswers: gameResult.detailedAnswers,
+                        maxCombo: gameResult.maxCombo || 0
                     });
                 } catch (err) {
                     console.error('결과 저장 실패:', err);
